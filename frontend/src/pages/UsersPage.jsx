@@ -310,7 +310,7 @@ export const UsersPage = () => {
 
         <Button variant="gradient" className="gap-2" onClick={() => setIsAddDialogOpen(true)}>
           <UserPlus className="h-4 w-4" />
-          Invite User
+          Add User
         </Button>
       </div>
 
