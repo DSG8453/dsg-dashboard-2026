@@ -56,6 +56,8 @@ import {
   EyeOff,
 } from "lucide-react";
 
+import { useSupport } from "@/context/SupportContext";
+
 const accessLevels = [
   { value: "full", label: "Full Access", description: "All tools and admin features" },
   { value: "standard", label: "Standard", description: "All tools, no admin features" },
@@ -64,23 +66,38 @@ const accessLevels = [
 ];
 
 export const UsersPage = () => {
+  const { settings, getWhatsAppLink } = useSupport();
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false);
+  const [createdUserCredentials, setCreatedUserCredentials] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [newUser, setNewUser] = useState({ 
     name: "", 
     email: "", 
-    password: "welcome123",
+    password: "",
     role: "User", 
-    status: "Pending",
+    status: "Active",
     access_level: "standard" 
   });
   const [editUser, setEditUser] = useState(null);
+
+  // Generate random password
+  const generatePassword = () => {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%";
+    let password = "";
+    for (let i = 0; i < 12; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+  };
 
   // Fetch users on mount
   useEffect(() => {
