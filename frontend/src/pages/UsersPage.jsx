@@ -505,14 +505,14 @@ export const UsersPage = () => {
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Invite New User</DialogTitle>
+            <DialogTitle>Add New User</DialogTitle>
             <DialogDescription>
-              Send an invitation to join the DSG Transport portal
+              Create a new user account for the DSG Transport portal
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="name">Full Name *</Label>
               <Input
                 id="name"
                 placeholder="Enter full name"
@@ -521,7 +521,7 @@ export const UsersPage = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
+              <Label htmlFor="email">Email Address *</Label>
               <Input
                 id="email"
                 type="email"
@@ -531,15 +531,25 @@ export const UsersPage = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Initial Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Enter initial password"
-                value={newUser.password}
-                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">User can change this after first login</p>
+              <Label htmlFor="password">Password *</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="password"
+                  type="text"
+                  placeholder="Enter password"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setNewUser({ ...newUser, password: generatePassword() })}
+                >
+                  Generate
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">You can share these credentials with the user via WhatsApp or copy</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -585,16 +595,94 @@ export const UsersPage = () => {
               {isSaving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending...
+                  Creating...
                 </>
               ) : (
                 <>
-                  <Mail className="mr-2 h-4 w-4" />
-                  Send Invitation
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Create User
                 </>
               )}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Credentials Share Dialog */}
+      <Dialog open={credentialsDialogOpen} onOpenChange={(open) => {
+        setCredentialsDialogOpen(open);
+        if (!open) {
+          setShowPassword(false);
+          setCopied(false);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-success">
+              <Check className="h-5 w-5" />
+              User Created Successfully!
+            </DialogTitle>
+            <DialogDescription>
+              Share these login credentials with {createdUserCredentials?.name}
+            </DialogDescription>
+          </DialogHeader>
+          {createdUserCredentials && (
+            <div className="space-y-4 py-4">
+              <div className="p-4 rounded-lg bg-muted/50 border border-border space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Email:</span>
+                  <span className="font-medium">{createdUserCredentials.email}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Password:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-medium">
+                      {showPassword ? createdUserCredentials.password : "••••••••••"}
+                    </span>
+                    <Button
+                      size="iconSm"
+                      variant="ghost"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="gradient"
+                  className="w-full gap-2"
+                  onClick={shareViaWhatsApp}
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Share via WhatsApp
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={copyCredentials}
+                >
+                  {copied ? (
+                    <>
+                      <Check className="h-4 w-4 text-success" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4" />
+                      Copy Credentials
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              <p className="text-xs text-center text-muted-foreground">
+                Make sure to share these credentials securely with the user
+              </p>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
