@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { useAuth } from "@/context/AuthContext";
 import {
   LayoutDashboard,
   User,
@@ -23,7 +24,6 @@ import {
   Menu,
   ChevronDown,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -37,11 +37,12 @@ const navigation = [
 
 export const Navbar = ({ currentUser }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    // Mock logout - would clear auth in real app
-    alert("Logout functionality - would redirect to login page");
+    logout();
+    navigate("/login");
   };
 
   return (
@@ -82,14 +83,14 @@ export const Navbar = ({ currentUser }) => {
                 <Button variant="ghost" className="gap-2 px-2">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-gradient-primary text-primary-foreground text-sm font-semibold">
-                      {currentUser.initials}
+                      {currentUser?.initials || "U"}
                     </AvatarFallback>
                   </Avatar>
                   <div className="hidden sm:block text-left">
                     <p className="text-sm font-semibold text-foreground">
-                      {currentUser.name}
+                      {currentUser?.name || "User"}
                     </p>
-                    <p className="text-xs text-admin">{currentUser.role}</p>
+                    <p className="text-xs text-admin">{currentUser?.role || "User"}</p>
                   </div>
                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 </Button>
@@ -97,9 +98,9 @@ export const Navbar = ({ currentUser }) => {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>
                   <div>
-                    <p className="font-semibold">{currentUser.name}</p>
+                    <p className="font-semibold">{currentUser?.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {currentUser.email}
+                      {currentUser?.email}
                     </p>
                   </div>
                 </DropdownMenuLabel>
@@ -131,12 +132,12 @@ export const Navbar = ({ currentUser }) => {
                   <div className="flex items-center gap-3 pb-4 border-b border-border">
                     <Avatar className="h-12 w-12">
                       <AvatarFallback className="bg-gradient-primary text-primary-foreground font-semibold">
-                        {currentUser.initials}
+                        {currentUser?.initials || "U"}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-semibold">{currentUser.name}</p>
-                      <p className="text-sm text-admin">{currentUser.role}</p>
+                      <p className="font-semibold">{currentUser?.name}</p>
+                      <p className="text-sm text-admin">{currentUser?.role}</p>
                     </div>
                   </div>
 
