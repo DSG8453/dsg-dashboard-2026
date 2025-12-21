@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,13 +21,30 @@ import { ExternalLink, MoreVertical, Trash2, Key, KeyRound, Check } from "lucide
 import { toast } from "sonner";
 
 export const ToolCard = ({ tool, onDelete }) => {
-  const { hasCredentialsForTool, getUserToolCredentials } = useAuth();
+  const { getUserToolCredentials } = useAuth();
   const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false);
-  
-  const hasCredentials = hasCredentialsForTool(tool.id);
-  const credentialsCount = getUserToolCredentials(tool.id).length;
+  const [credentials, setCredentials] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleAccess = () => {
+  // Fetch credentials when dialog opens
+  const loadCredentials = async () => {
+    if (!tool?.id) return;
+    setIsLoading(true);
+    try {
+      const creds = await getUserToolCredentials(tool.id);
+      setCredentials(creds);
+    } catch (error) {
+      console.error("Failed to load credentials:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Use the credentials_count from the tool if available
+  const credentialsCount = tool.credentials_count || credentials.length;
+  const hasCredentials = credentialsCount > 0;
+
+  const handleAccess = async () => {
     if (hasCredentials) {
       // If user has credentials, open credentials dialog to choose which account
       setCredentialsDialogOpen(true);
@@ -39,9 +56,8 @@ export const ToolCard = ({ tool, onDelete }) => {
     }
   };
 
-  const handleQuickLaunch = () => {
+  const handleQuickLaunch = async () => {
     if (tool.url && tool.url !== "#") {
-      const credentials = getUserToolCredentials(tool.id);
       if (credentials.length > 0) {
         // Copy first credential's username
         navigator.clipboard.writeText(credentials[0].username);
@@ -50,6 +66,13 @@ export const ToolCard = ({ tool, onDelete }) => {
         });
       }
       window.open(tool.url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const handleDialogOpen = async (open) => {
+    setCredentialsDialogOpen(open);
+    if (open) {
+      await loadCredentials();
     }
   };
 
@@ -95,7 +118,7 @@ export const ToolCard = ({ tool, onDelete }) => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setCredentialsDialogOpen(true)}>
+                <DropdownMenuItem onClick={() => handleDialogOpen(true)}>
                   <Key className="mr-2 h-4 w-4" />
                   Manage Credentials
                 </DropdownMenuItem>
@@ -149,7 +172,7 @@ export const ToolCard = ({ tool, onDelete }) => {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => setCredentialsDialogOpen(true)}
+                    onClick={() => handleDialogOpen(true)}
                   >
                     <Key className="h-4 w-4" />
                   </Button>
@@ -166,7 +189,10 @@ export const ToolCard = ({ tool, onDelete }) => {
       <ToolCredentialsDialog
         tool={tool}
         open={credentialsDialogOpen}
-        onOpenChange={setCredentialsDialogOpen}
+        onOpenChange={handleDialogOpen}
+        initialCredentials={credentials}
+        isLoading={isLoading}
+        onCredentialsChange={loadCredentials}
       />
     </>
   );
