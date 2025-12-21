@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -69,9 +69,10 @@ const categoryLabels = {
 
 export const IssuesPage = () => {
   const { user } = useAuth();
-  const { issues, analyzeWithAI, updateIssue, resolveIssue, getUserIssues } = useSupport();
+  const { issues, analyzeWithAI, updateIssue, resolveIssue, isLoading, refreshIssues } = useSupport();
   const [selectedIssue, setSelectedIssue] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isResolving, setIsResolving] = useState(false);
   const [resolutionNote, setResolutionNote] = useState("");
   const [adminNotes, setAdminNotes] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -79,15 +80,22 @@ export const IssuesPage = () => {
 
   const isAdmin = user?.role === "Administrator";
 
+  // Refresh issues on mount
+  useEffect(() => {
+    if (user) {
+      refreshIssues();
+    }
+  }, [user]);
+
   // Get issues based on role
-  const displayIssues = isAdmin ? issues : issues.filter((i) => i.userId === user?.id);
+  const displayIssues = isAdmin ? issues : issues.filter((i) => i.user_id === user?.id);
 
   // Filter issues
   const filteredIssues = displayIssues.filter((issue) => {
     const matchesSearch =
-      issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      issue.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      issue.userName?.toLowerCase().includes(searchQuery.toLowerCase());
+      issue.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      issue.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      issue.user_name?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || issue.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -107,7 +115,7 @@ export const IssuesPage = () => {
         });
         // Refresh selected issue
         const updated = issues.find((i) => i.id === issueId);
-        if (updated) setSelectedIssue(updated);
+        if (updated) setSelectedIssue({ ...updated, ai_analysis: analysis });
       }
     } catch (error) {
       toast.error("Analysis failed. Please try again.");
@@ -116,28 +124,44 @@ export const IssuesPage = () => {
     }
   };
 
-  const handleResolve = () => {
+  const handleResolve = async () => {
     if (!resolutionNote.trim()) {
       toast.error("Please add a resolution note");
       return;
     }
 
-    resolveIssue(selectedIssue.id, {
-      note: resolutionNote,
-      resolvedBy: user.name,
-      appliedFix: selectedIssue.aiAnalysis?.suggestedFix || "Manual fix applied",
-    });
-
-    toast.success("Issue resolved!", {
-      description: `User ${selectedIssue.userName} will be notified.`,
-    });
-    setSelectedIssue(null);
-    setResolutionNote("");
+    setIsResolving(true);
+    try {
+      await resolveIssue(selectedIssue.id, resolutionNote);
+      toast.success("Issue resolved!", {
+        description: `User ${selectedIssue.user_name} will be notified.`,
+      });
+      setSelectedIssue(null);
+      setResolutionNote("");
+    } catch (error) {
+      toast.error(`Failed to resolve issue: ${error.message}`);
+    } finally {
+      setIsResolving(false);
+    }
   };
 
-  const handleSaveNotes = () => {
-    updateIssue(selectedIssue.id, { adminNotes });
-    toast.success("Notes saved!");
+  const handleSaveNotes = async () => {
+    try {
+      await updateIssue(selectedIssue.id, { admin_notes: adminNotes });
+      toast.success("Notes saved!");
+    } catch (error) {
+      toast.error(`Failed to save notes: ${error.message}`);
+    }
+  };
+
+  const handleMarkInProgress = async () => {
+    try {
+      await updateIssue(selectedIssue.id, { status: "in_progress" });
+      toast.success("Status updated to In Progress");
+      setSelectedIssue({ ...selectedIssue, status: "in_progress" });
+    } catch (error) {
+      toast.error(`Failed to update status: ${error.message}`);
+    }
   };
 
   const getStatusIcon = (status) => {
@@ -154,6 +178,14 @@ export const IssuesPage = () => {
         return <AlertTriangle className="h-4 w-4" />;
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
@@ -288,7 +320,7 @@ export const IssuesPage = () => {
                   isAdmin={isAdmin}
                   onView={() => {
                     setSelectedIssue(issue);
-                    setAdminNotes(issue.adminNotes || "");
+                    setAdminNotes(issue.admin_notes || "");
                   }}
                 />
               ))}
@@ -314,7 +346,7 @@ export const IssuesPage = () => {
                   isAdmin={isAdmin}
                   onView={() => {
                     setSelectedIssue(issue);
-                    setAdminNotes(issue.adminNotes || "");
+                    setAdminNotes(issue.admin_notes || "");
                   }}
                 />
               ))}
@@ -335,8 +367,8 @@ export const IssuesPage = () => {
                 </DialogTitle>
                 <DialogDescription>
                   {isAdmin
-                    ? `Reported by ${selectedIssue.userName} (${selectedIssue.userEmail})`
-                    : `Submitted on ${new Date(selectedIssue.createdAt).toLocaleDateString()}`}
+                    ? `Reported by ${selectedIssue.user_name} (${selectedIssue.user_email})`
+                    : `Submitted on ${new Date(selectedIssue.created_at).toLocaleDateString()}`}
                 </DialogDescription>
               </DialogHeader>
 
@@ -356,12 +388,12 @@ export const IssuesPage = () => {
                   </div>
                   <p className="text-sm">{selectedIssue.description}</p>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Submitted: {new Date(selectedIssue.createdAt).toLocaleString()}
+                    Submitted: {new Date(selectedIssue.created_at).toLocaleString()}
                   </p>
                 </div>
 
                 {/* AI Analysis Section */}
-                {selectedIssue.aiAnalysis ? (
+                {selectedIssue.ai_analysis ? (
                   <div className="p-4 rounded-lg border border-primary/30 bg-primary/5">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-sm font-medium flex items-center gap-2">
@@ -369,17 +401,17 @@ export const IssuesPage = () => {
                         AI Diagnosis
                       </span>
                       <Badge variant="default">
-                        {Math.round(selectedIssue.aiAnalysis.confidence * 100)}% confidence
+                        {Math.round(selectedIssue.ai_analysis.confidence * 100)}% confidence
                       </Badge>
                     </div>
-                    <p className="text-sm mb-4">{selectedIssue.aiAnalysis.diagnosis}</p>
+                    <p className="text-sm mb-4">{selectedIssue.ai_analysis.diagnosis}</p>
 
                     <Label className="text-sm font-medium">Suggested Fix:</Label>
                     <pre className="text-sm mt-1 p-3 rounded bg-muted whitespace-pre-wrap">
-                      {selectedIssue.aiAnalysis.suggestedFix}
+                      {selectedIssue.ai_analysis.suggested_fix}
                     </pre>
                     <p className="text-xs text-muted-foreground mt-2">
-                      Analyzed: {new Date(selectedIssue.aiAnalysis.analyzedAt).toLocaleString()}
+                      Analyzed: {new Date(selectedIssue.ai_analysis.analyzed_at).toLocaleString()}
                     </p>
                   </div>
                 ) : (
@@ -424,8 +456,8 @@ export const IssuesPage = () => {
                     </div>
                     <p className="text-sm">{selectedIssue.resolution.note}</p>
                     <p className="text-xs text-muted-foreground mt-2">
-                      Resolved by {selectedIssue.resolution.resolvedBy} on{" "}
-                      {new Date(selectedIssue.resolution.resolvedAt).toLocaleString()}
+                      Resolved by {selectedIssue.resolution.resolved_by} on{" "}
+                      {new Date(selectedIssue.resolution.resolved_at).toLocaleString()}
                     </p>
                   </div>
                 )}
@@ -466,16 +498,23 @@ export const IssuesPage = () => {
                           variant="gradient"
                           className="flex-1 gap-2"
                           onClick={handleResolve}
+                          disabled={isResolving}
                         >
-                          <CheckCircle className="h-4 w-4" />
-                          Resolve & Send to User
+                          {isResolving ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Resolving...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="h-4 w-4" />
+                              Resolve & Send to User
+                            </>
+                          )}
                         </Button>
                         <Button
                           variant="outline"
-                          onClick={() => {
-                            updateIssue(selectedIssue.id, { status: "in_progress" });
-                            toast.success("Status updated to In Progress");
-                          }}
+                          onClick={handleMarkInProgress}
                         >
                           Mark In Progress
                         </Button>
@@ -539,7 +578,7 @@ const IssueCard = ({ issue, isAdmin, onView }) => {
               <Badge variant="outline" className="text-xs">
                 {categoryLabels[issue.category] || issue.category}
               </Badge>
-              {issue.aiAnalysis && (
+              {issue.ai_analysis && (
                 <Badge variant="default" className="text-xs gap-1">
                   <Sparkles className="h-3 w-3" />
                   AI Analyzed
@@ -550,8 +589,8 @@ const IssueCard = ({ issue, isAdmin, onView }) => {
               {issue.description}
             </p>
             <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-              {isAdmin && <span>By: {issue.userName}</span>}
-              <span>{new Date(issue.createdAt).toLocaleDateString()}</span>
+              {isAdmin && <span>By: {issue.user_name}</span>}
+              <span>{new Date(issue.created_at).toLocaleDateString()}</span>
             </div>
           </div>
           <Button variant="outline" size="sm" className="shrink-0">
