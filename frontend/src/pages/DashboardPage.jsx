@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { HeaderCard } from "@/components/dashboard/HeaderCard";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ToolCard } from "@/components/dashboard/ToolCard";
@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/context/AuthContext";
+import { toolsAPI, usersAPI } from "@/services/api";
 import { toast } from "sonner";
 import {
   Wrench,
@@ -42,7 +43,13 @@ import {
   FolderOpen,
   Key,
   Plus,
+  Loader2,
 } from "lucide-react";
+
+const iconMap = {
+  Shield, Monitor, Truck, Package, FileCheck, Cloud, Wrench, Database,
+  Globe, CreditCard, BarChart3, Mail, Calendar, FolderOpen, Key,
+};
 
 const iconOptions = [
   { name: "Shield", icon: Shield },
@@ -74,92 +81,20 @@ const categoryOptions = [
   "Other",
 ];
 
-const initialTools = [
-  {
-    id: 1,
-    name: "Bitwarden",
-    category: "Security",
-    description: "Password manager for secure credential storage and sharing across the team.",
-    icon: Shield,
-    iconName: "Shield",
-    url: "https://vault.bitwarden.com",
-  },
-  {
-    id: 2,
-    name: "Zoho Assist",
-    category: "Support",
-    description: "Remote desktop support and control panel for IT assistance and troubleshooting.",
-    icon: Monitor,
-    iconName: "Monitor",
-    url: "https://assist.zoho.com",
-  },
-  {
-    id: 3,
-    name: "Ascend TMS",
-    category: "TMS",
-    description: "Transportation management system for fleet operations and logistics tracking.",
-    icon: Truck,
-    iconName: "Truck",
-    url: "#",
-  },
-  {
-    id: 4,
-    name: "RMIS",
-    category: "Compliance",
-    description: "Risk management and compliance tracking system for regulatory requirements.",
-    icon: FileCheck,
-    iconName: "FileCheck",
-    url: "#",
-  },
-  {
-    id: 5,
-    name: "DAT Load Board",
-    category: "Freight",
-    description: "Load board platform for finding and posting freight opportunities.",
-    icon: Package,
-    iconName: "Package",
-    url: "#",
-  },
-  {
-    id: 6,
-    name: "Truckstop",
-    category: "Freight",
-    description: "Freight matching and load board services for trucking companies.",
-    icon: Cloud,
-    iconName: "Cloud",
-    url: "#",
-  },
-  {
-    id: 7,
-    name: "Fleet Maintenance",
-    category: "Operations",
-    description: "Vehicle maintenance tracking and scheduling system for fleet management.",
-    icon: Wrench,
-    iconName: "Wrench",
-    url: "#",
-  },
-  {
-    id: 8,
-    name: "Fuel Cards Portal",
-    category: "Finance",
-    description: "Fuel card management and expense tracking for fleet operations.",
-    icon: Database,
-    iconName: "Database",
-    url: "#",
-  },
-];
-
 export const DashboardPage = ({ currentUser }) => {
   const { user, addToolCredential } = useAuth();
-  const [tools, setTools] = useState(initialTools);
+  const [tools, setTools] = useState([]);
+  const [usersCount, setUsersCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [addCredentials, setAddCredentials] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [newTool, setNewTool] = useState({
     name: "",
     category: "",
     description: "",
     url: "",
-    iconName: "Globe",
+    icon: "Globe",
   });
   const [credentials, setCredentials] = useState({
     label: "",
@@ -169,9 +104,44 @@ export const DashboardPage = ({ currentUser }) => {
 
   const isAdmin = user?.role === "Administrator";
 
+  // Fetch tools and users count on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const toolsData = await toolsAPI.getAll();
+        // Map icon string to actual component
+        const toolsWithIcons = toolsData.map(tool => ({
+          ...tool,
+          icon: iconMap[tool.icon] || Globe,
+          iconName: tool.icon,
+        }));
+        setTools(toolsWithIcons);
+
+        // Get users count if admin
+        if (user?.role === "Administrator") {
+          try {
+            const usersData = await usersAPI.getAll();
+            setUsersCount(usersData.length);
+          } catch {
+            setUsersCount(0);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch tools:", error);
+        toast.error("Failed to load tools");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
+
   const stats = [
     { value: String(tools.length), label: "Active Tools", variant: "blue", icon: Wrench },
-    { value: "12", label: "Total Users", variant: "indigo", icon: Users },
+    { value: String(usersCount || "—"), label: "Total Users", variant: "indigo", icon: Users },
     { value: "Operational", label: "System Status", variant: "green", icon: Activity },
   ];
 
@@ -179,67 +149,95 @@ export const DashboardPage = ({ currentUser }) => {
     setIsAddDialogOpen(true);
   };
 
-  const handleSubmitTool = () => {
+  const handleSubmitTool = async () => {
     if (!newTool.name || !newTool.category || !newTool.description) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    // Validate credentials if enabled
     if (addCredentials && (!credentials.username || !credentials.password)) {
       toast.error("Please fill in credential username and password");
       return;
     }
 
-    const selectedIcon = iconOptions.find((i) => i.name === newTool.iconName);
-    const toolId = Date.now();
-    
-    const tool = {
-      id: toolId,
-      name: newTool.name,
-      category: newTool.category,
-      description: newTool.description,
-      url: newTool.url || "#",
-      icon: selectedIcon?.icon || Globe,
-      iconName: newTool.iconName,
-    };
+    setIsSaving(true);
 
-    setTools([...tools, tool]);
+    try {
+      // Create tool via API
+      const createdTool = await toolsAPI.create({
+        name: newTool.name,
+        category: newTool.category,
+        description: newTool.description,
+        url: newTool.url || "#",
+        icon: newTool.icon,
+      });
 
-    // Add credentials if provided
-    if (addCredentials && credentials.username && credentials.password) {
-      addToolCredential(
-        toolId,
-        credentials.username,
-        credentials.password,
-        credentials.label || "Default Account"
-      );
-      toast.success(`${tool.name} added with credentials!`, {
-        description: `Tool and login credentials saved successfully.`,
+      // Add to local state with icon component
+      const toolWithIcon = {
+        ...createdTool,
+        icon: iconMap[createdTool.icon] || Globe,
+        iconName: createdTool.icon,
+      };
+
+      // Add credentials if provided
+      if (addCredentials && credentials.username && credentials.password) {
+        try {
+          await addToolCredential(
+            createdTool.id,
+            credentials.username,
+            credentials.password,
+            credentials.label || "Default Account"
+          );
+          toolWithIcon.credentials_count = 1;
+          toast.success(`${createdTool.name} added with credentials!`, {
+            description: `Tool and login credentials saved successfully.`,
+          });
+        } catch (credError) {
+          toast.warning(`Tool added but credentials failed: ${credError.message}`);
+        }
+      } else {
+        toast.success(`${createdTool.name} added successfully!`, {
+          description: `New tool added to ${createdTool.category} category.`,
+        });
+      }
+
+      setTools([...tools, toolWithIcon]);
+
+      // Reset form
+      setNewTool({
+        name: "",
+        category: "",
+        description: "",
+        url: "",
+        icon: "Globe",
       });
-    } else {
-      toast.success(`${tool.name} added successfully!`, {
-        description: `New tool added to ${tool.category} category.`,
-      });
+      setCredentials({ label: "", username: "", password: "" });
+      setAddCredentials(false);
+      setIsAddDialogOpen(false);
+    } catch (error) {
+      toast.error(`Failed to add tool: ${error.message}`);
+    } finally {
+      setIsSaving(false);
     }
-
-    // Reset form
-    setNewTool({
-      name: "",
-      category: "",
-      description: "",
-      url: "",
-      iconName: "Globe",
-    });
-    setCredentials({ label: "", username: "", password: "" });
-    setAddCredentials(false);
-    setIsAddDialogOpen(false);
   };
 
-  const handleDeleteTool = (toolId) => {
-    setTools(tools.filter((t) => t.id !== toolId));
-    toast.success("Tool removed successfully!");
+  const handleDeleteTool = async (toolId) => {
+    try {
+      await toolsAPI.delete(toolId);
+      setTools(tools.filter((t) => t.id !== toolId));
+      toast.success("Tool removed successfully!");
+    } catch (error) {
+      toast.error(`Failed to delete tool: ${error.message}`);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
@@ -305,8 +303,8 @@ export const DashboardPage = ({ currentUser }) => {
               <div className="space-y-2">
                 <Label htmlFor="icon">Icon</Label>
                 <Select
-                  value={newTool.iconName}
-                  onValueChange={(value) => setNewTool({ ...newTool, iconName: value })}
+                  value={newTool.icon}
+                  onValueChange={(value) => setNewTool({ ...newTool, icon: value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select icon" />
@@ -417,6 +415,7 @@ export const DashboardPage = ({ currentUser }) => {
                   setIsAddDialogOpen(false);
                   setAddCredentials(false);
                 }}
+                disabled={isSaving}
               >
                 Cancel
               </Button>
@@ -424,8 +423,16 @@ export const DashboardPage = ({ currentUser }) => {
                 variant="gradient"
                 className="flex-1"
                 onClick={handleSubmitTool}
+                disabled={isSaving}
               >
-                {addCredentials ? "Add Tool & Credentials" : "Add Tool"}
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  addCredentials ? "Add Tool & Credentials" : "Add Tool"
+                )}
               </Button>
             </div>
           </div>
