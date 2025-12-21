@@ -1,11 +1,17 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ExternalLink, MoreVertical, Trash2 } from "lucide-react";
 
-export const ToolCard = ({ tool }) => {
+export const ToolCard = ({ tool, onDelete }) => {
   const handleAccess = () => {
-    if (tool.url) {
+    if (tool.url && tool.url !== "#") {
       window.open(tool.url, "_blank", "noopener,noreferrer");
     }
   };
@@ -25,6 +31,24 @@ export const ToolCard = ({ tool }) => {
               {tool.category}
             </Badge>
           </div>
+          {onDelete && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="iconSm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => onDelete(tool.id)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Remove Tool
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         <p className="text-sm text-muted-foreground leading-relaxed mb-4 flex-1">
