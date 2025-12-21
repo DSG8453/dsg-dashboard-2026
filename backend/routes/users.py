@@ -59,7 +59,8 @@ async def create_user(user_data: UserCreate, current_user: dict = Depends(requir
     result = await db.users.insert_one(new_user)
     new_user["id"] = str(result.inserted_id)
     del new_user["password"]
-    del new_user["_id"] if "_id" in new_user else None
+    if "_id" in new_user:
+        del new_user["_id"]
     
     return new_user
 
