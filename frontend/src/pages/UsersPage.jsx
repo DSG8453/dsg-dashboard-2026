@@ -49,6 +49,11 @@ import {
   Mail,
   UserCheck,
   Loader2,
+  Copy,
+  MessageCircle,
+  Check,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 const accessLevels = [
