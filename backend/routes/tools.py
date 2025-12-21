@@ -46,10 +46,16 @@ async def create_tool(tool_data: ToolCreate, current_user: dict = Depends(requir
     }
     
     result = await db.tools.insert_one(new_tool)
-    new_tool["id"] = str(result.inserted_id)
-    new_tool["credentials_count"] = 0
     
-    return new_tool
+    return {
+        "id": str(result.inserted_id),
+        "name": tool_data.name,
+        "category": tool_data.category,
+        "description": tool_data.description,
+        "icon": tool_data.icon,
+        "url": tool_data.url,
+        "credentials_count": 0
+    }
 
 @router.get("/{tool_id}", response_model=dict)
 async def get_tool(tool_id: str, current_user: dict = Depends(get_current_user)):
