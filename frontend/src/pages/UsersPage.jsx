@@ -59,15 +59,24 @@ import {
   AlertTriangle,
   Wrench,
   Package,
+  Crown,
 } from "lucide-react";
 
 import { useSupport } from "@/context/SupportContext";
+import { useAuth } from "@/context/AuthContext";
 
 const accessLevels = [
   { value: "full", label: "Full Access", description: "All tools and admin features" },
   { value: "standard", label: "Standard", description: "All tools, no admin features" },
   { value: "limited", label: "Limited", description: "Selected tools only" },
   { value: "readonly", label: "Read Only", description: "View only, no actions" },
+];
+
+// Role options - Super Admin can assign any role
+const roleOptions = [
+  { value: "Super Administrator", label: "Super Admin", description: "Full control over everything" },
+  { value: "Administrator", label: "Admin", description: "Can assign tools to users" },
+  { value: "User", label: "User", description: "Access assigned tools only" },
 ];
 
 // Approved company domains
@@ -85,9 +94,14 @@ const isApprovedDomain = (email) => {
 };
 
 export const UsersPage = () => {
+  const { user: currentUser } = useAuth();
   const { settings, getWhatsAppLink } = useSupport();
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Role checks
+  const isSuperAdmin = currentUser?.role === "Super Administrator";
+  const isAdmin = currentUser?.role === "Administrator";
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
