@@ -181,13 +181,8 @@ export const LoginPage = () => {
       const redirectUrl = window.location.origin + '/';
       const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
       
-      // Try to redirect in the top-level window if we're in an iframe (preview environment)
-      if (window.top !== window.self) {
-        // We're in an iframe - open in top window or new tab
-        window.top.location.href = authUrl;
-      } else {
-        window.location.href = authUrl;
-      }
+      // Use window.location.replace for cleaner redirect (replaces current history entry)
+      window.location.replace(authUrl);
     } else {
       toast.info(`${provider} SSO`, {
         description: "Microsoft SSO is not available. Please use Google or email login.",
