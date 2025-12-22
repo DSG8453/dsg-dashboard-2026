@@ -252,3 +252,80 @@ async def send_otp_email(to_email: str, user_name: str, otp: str) -> bool:
     
     return send_email(to_email, subject, html_content, text_content)
 
+
+
+async def send_password_reset_email(to_email: str, user_name: str, new_password: str) -> bool:
+    """Send password reset email with new password"""
+    subject = "🔑 DSG Transport Portal - Your Password Has Been Reset"
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
+            .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }}
+            .credential-box {{ background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #667eea; }}
+            .label {{ color: #666; font-size: 12px; text-transform: uppercase; }}
+            .value {{ font-size: 18px; font-weight: bold; color: #333; font-family: monospace; letter-spacing: 1px; }}
+            .warning {{ background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107; }}
+            .footer {{ text-align: center; color: #666; font-size: 12px; margin-top: 20px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🔑 Password Reset</h1>
+                <p>Your account password has been updated</p>
+            </div>
+            <div class="content">
+                <p>Hello <strong>{user_name}</strong>,</p>
+                <p>Your password for the DSG Transport Portal has been reset by an administrator. Please use the new credentials below to log in:</p>
+                
+                <div class="credential-box">
+                    <p class="label">Your Email</p>
+                    <p class="value">{to_email}</p>
+                    <br>
+                    <p class="label">Your New Password</p>
+                    <p class="value">{new_password}</p>
+                </div>
+                
+                <div class="warning">
+                    <p style="margin: 0;"><strong>⚠️ Security Recommendations:</strong></p>
+                    <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+                        <li>Log in immediately and verify your account</li>
+                        <li>Keep your password confidential</li>
+                        <li>Contact admin if you didn't request this reset</li>
+                    </ul>
+                </div>
+                
+                <div class="footer">
+                    <p>This is an automated message from DSG Transport LLC</p>
+                    <p>© 2025 DSG Transport LLC. All rights reserved.</p>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_content = f"""
+    Password Reset - DSG Transport Portal
+    
+    Hello {user_name},
+    
+    Your password has been reset by an administrator.
+    
+    Your New Credentials:
+    Email: {to_email}
+    Password: {new_password}
+    
+    Please log in and keep your password secure.
+    
+    - DSG Transport LLC
+    """
+    
+    return send_email(to_email, subject, html_content, text_content)
+
