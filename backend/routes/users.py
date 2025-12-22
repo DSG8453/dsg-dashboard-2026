@@ -239,3 +239,64 @@ async def reactivate_user(user_id: str, current_user: dict = Depends(require_adm
     )
     
     return {"message": "User reactivated"}
+
+@router.put("/{user_id}/tool-access")
+async def update_tool_access(
+    user_id: str, 
+    tool_ids: List[str],
+    current_user: dict = Depends(require_admin)
+):
+    """Update user's tool access (admin only)"""
+    db = await get_db()
+    
+    try:
+        obj_id = ObjectId(user_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+    
+    user = await db.users.find_one({"_id": obj_id})
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Update allowed tools
+    await db.users.update_one(
+        {"_id": obj_id},
+        {"$set": {"allowed_tools": tool_ids}}
+    )
+    
+    return {
+        "message": f"Tool access updated for {user['name']}",
+        "allowed_tools": tool_ids
+    }
+
+@router.get("/{user_id}/tool-access")
+async def get_tool_access(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Get user's allowed tools"""
+    db = await get_db()
+    
+    # Users can only view their own access unless admin
+    if current_user["role"] != "Administrator" and current_user["id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized"
+        )
+    
+    try:
+        obj_id = ObjectId(user_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+    
+    user = await db.users.find_one({"_id": obj_id})
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return {
+        "user_id": user_id,
+        "allowed_tools": user.get("allowed_tools", [])
+    }
