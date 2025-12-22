@@ -81,6 +81,17 @@ export const usersAPI = {
       method: 'PUT',
       body: JSON.stringify(toolIds),
     }),
+  
+  // Assign users to an Admin (Super Admin only)
+  assignUsersToAdmin: (adminId, userIds) =>
+    fetchAPI(`/api/users/${adminId}/assign-users`, {
+      method: 'PUT',
+      body: JSON.stringify(userIds),
+    }),
+  
+  // Get users assigned to an Admin
+  getAssignedUsers: (adminId) =>
+    fetchAPI(`/api/users/${adminId}/assigned-users`),
 };
 
 // Tools API
