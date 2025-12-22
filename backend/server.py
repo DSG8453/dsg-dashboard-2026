@@ -14,6 +14,7 @@ from routes.tools import router as tools_router
 from routes.credentials import router as credentials_router
 from routes.issues import router as issues_router
 from routes.settings import router as settings_router
+from routes.devices import router as devices_router
 from database import connect_db, close_db
 
 @asynccontextmanager
