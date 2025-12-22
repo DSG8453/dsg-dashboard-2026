@@ -95,6 +95,7 @@ export const UsersPage = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [externalDomainApproved, setExternalDomainApproved] = useState(false);
+  const [sendInvitationEmail, setSendInvitationEmail] = useState(true);
   const [newUser, setNewUser] = useState({ 
     name: "", 
     email: "", 
