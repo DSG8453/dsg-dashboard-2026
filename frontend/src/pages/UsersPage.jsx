@@ -1338,6 +1338,115 @@ export const UsersPage = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Assign Users to Admin Dialog (Super Admin only) */}
+      <Dialog open={assignUsersDialogOpen} onOpenChange={setAssignUsersDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              Assign Users to Admin
+            </DialogTitle>
+            <DialogDescription>
+              Select which users <span className="font-semibold">{assignUsersAdmin?.name}</span> can manage
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Admin Info */}
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-admin/5 border border-admin/20">
+              <div className="w-10 h-10 rounded-full bg-admin/20 flex items-center justify-center">
+                <Shield className="h-5 w-5 text-admin" />
+              </div>
+              <div>
+                <p className="font-semibold">{assignUsersAdmin?.name}</p>
+                <p className="text-sm text-muted-foreground">{assignUsersAdmin?.email}</p>
+              </div>
+            </div>
+
+            {/* Users List */}
+            <div>
+              <p className="text-sm font-medium mb-2">Select users to assign:</p>
+              <ScrollArea className="h-64 border rounded-lg p-2">
+                <div className="space-y-2">
+                  {getAssignableUsers().length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No users available to assign
+                    </p>
+                  ) : (
+                    getAssignableUsers().map(user => (
+                      <div
+                        key={user.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                          selectedUsersToAssign.includes(user.id)
+                            ? "bg-primary/10 border-2 border-primary"
+                            : "bg-muted/30 border-2 border-transparent hover:bg-muted/50"
+                        }`}
+                        onClick={() => handleToggleUserAssignment(user.id)}
+                      >
+                        <Checkbox
+                          checked={selectedUsersToAssign.includes(user.id)}
+                          onCheckedChange={() => handleToggleUserAssignment(user.id)}
+                        />
+                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
+                          {user.initials}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{user.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                        </div>
+                        <Badge variant={user.status === "Active" ? "success" : "warning"}>
+                          {user.status}
+                        </Badge>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+
+            {/* Summary */}
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+              <p className="text-sm">
+                <span className="font-semibold text-primary">{selectedUsersToAssign.length}</span> user(s) will be managed by this Admin
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Admin can suspend/activate and assign tools to these users only
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setAssignUsersDialogOpen(false)}
+                disabled={isSaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="gradient"
+                className="flex-1"
+                onClick={handleSaveUserAssignment}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check className="mr-2 h-4 w-4" />
+                    Assign Users
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
