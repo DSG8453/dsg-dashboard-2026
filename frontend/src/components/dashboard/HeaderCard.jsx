@@ -1,8 +1,12 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export const HeaderCard = ({ currentUser, onAddTool }) => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "Administrator";
+
   return (
     <Card className="glass-card-strong border-2 border-border/50 shadow-lg mb-8">
       <CardContent className="p-6">
@@ -20,17 +24,20 @@ export const HeaderCard = ({ currentUser, onAddTool }) => {
               <p className="text-muted-foreground">
                 Welcome back,{" "}
                 <span className="font-semibold text-foreground">
-                  {currentUser?.name || "Administrator"}
+                  {currentUser?.name || "User"}
                 </span>
-                <span className="text-admin font-semibold"> • {currentUser?.role || "Administrator"}</span>
+                <span className="text-admin font-semibold"> • {currentUser?.role || "User"}</span>
               </p>
             </div>
           </div>
 
-          <Button variant="gradient" onClick={onAddTool} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add Tool
-          </Button>
+          {/* Add Tool button - Admin only */}
+          {isAdmin && (
+            <Button variant="gradient" onClick={onAddTool} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Add Tool
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
