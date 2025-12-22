@@ -246,6 +246,8 @@ export const AuthProvider = ({ children }) => {
     deviceInfo,
     isDeviceApproved,
     login,
+    verifyOtp,
+    resendOtp,
     logout,
     checkDeviceStatus,
     addToolCredential,
