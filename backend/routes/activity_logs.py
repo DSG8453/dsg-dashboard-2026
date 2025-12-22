@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from models.activity_log import ActivityLogCreate, ActivityLogResponse, ActivityType
 from database import get_db
-from routes.auth import get_current_user, require_admin
+from routes.auth import get_current_user, require_super_admin
 from bson import ObjectId
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -42,9 +42,9 @@ async def log_activity(
 async def get_activity_logs(
     limit: int = Query(50, le=200),
     activity_type: Optional[str] = Query(None),
-    current_user: dict = Depends(require_admin)
+    current_user: dict = Depends(require_super_admin)
 ):
-    """Get activity logs (admin only)"""
+    """Get activity logs (Super Admin only)"""
     db = await get_db()
     
     # Build filter
