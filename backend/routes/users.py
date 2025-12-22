@@ -35,7 +35,11 @@ async def get_users(current_user: dict = Depends(require_admin)):
     return users
 
 @router.post("", response_model=dict)
-async def create_user(user_data: UserCreate, current_user: dict = Depends(require_admin)):
+async def create_user(
+    user_data: UserCreate, 
+    send_email: bool = Query(False, description="Send invitation email to user"),
+    current_user: dict = Depends(require_admin)
+):
     """Create a new user (admin only)"""
     db = await get_db()
     
@@ -46,6 +50,9 @@ async def create_user(user_data: UserCreate, current_user: dict = Depends(requir
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
+    
+    # Store plain password for email before hashing
+    plain_password = user_data.password
     
     # Create user
     initials = "".join([n[0].upper() for n in user_data.name.split()[:2]])
@@ -62,12 +69,30 @@ async def create_user(user_data: UserCreate, current_user: dict = Depends(requir
     }
     
     result = await db.users.insert_one(new_user)
-    new_user["id"] = str(result.inserted_id)
-    del new_user["password"]
-    if "_id" in new_user:
-        del new_user["_id"]
+    user_id = str(result.inserted_id)
     
-    return new_user
+    # Send invitation email if requested
+    email_sent = False
+    if send_email:
+        email_sent = send_invitation_email(
+            to_email=user_data.email.lower(),
+            user_name=user_data.name,
+            password=plain_password,
+            login_url=FRONTEND_URL
+        )
+    
+    return {
+        "id": user_id,
+        "email": user_data.email.lower(),
+        "name": user_data.name,
+        "role": user_data.role.value,
+        "status": user_data.status.value,
+        "access_level": user_data.access_level.value,
+        "initials": initials,
+        "created_at": "2025-12-21T00:00:00Z",
+        "last_active": "Never",
+        "email_sent": email_sent
+    }
 
 @router.get("/{user_id}", response_model=dict)
 async def get_user(user_id: str, current_user: dict = Depends(get_current_user)):
