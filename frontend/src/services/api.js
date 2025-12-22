@@ -109,6 +109,9 @@ export const usersAPI = {
   toggle2SV: (id, enabled) =>
     fetchAPI(`/api/users/${id}/toggle-2sv?enabled=${enabled}`, { method: 'PUT' }),
   
+  changeRole: (id, newRole) =>
+    fetchAPI(`/api/users/${id}/change-role?new_role=${encodeURIComponent(newRole)}`, { method: 'PUT' }),
+  
   // Assign users to an Admin (Super Admin only)
   assignUsersToAdmin: (adminId, userIds) =>
     fetchAPI(`/api/users/${adminId}/assign-users`, {
