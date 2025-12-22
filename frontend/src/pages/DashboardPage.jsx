@@ -182,22 +182,25 @@ export const DashboardPage = ({ currentUser }) => {
       return;
     }
 
-    if (addCredentials && (!credentials.username || !credentials.password)) {
-      toast.error("Please fill in credential username and password");
-      return;
-    }
-
     setIsSaving(true);
 
     try {
-      // Create tool via API
-      const createdTool = await toolsAPI.create({
+      // Create tool via API with credentials
+      const toolData = {
         name: newTool.name,
         category: newTool.category,
         description: newTool.description,
         url: newTool.url || "#",
         icon: newTool.icon,
-      });
+        credentials: (addCredentials && (newCredentials.username || newCredentials.password)) ? {
+          username: newCredentials.username,
+          password: newCredentials.password,
+          login_url: newCredentials.login_url,
+          notes: newCredentials.notes
+        } : null
+      };
+
+      const createdTool = await toolsAPI.create(toolData);
 
       // Add to local state with icon component
       const toolWithIcon = {
@@ -206,27 +209,9 @@ export const DashboardPage = ({ currentUser }) => {
         iconName: createdTool.icon,
       };
 
-      // Add credentials if provided
-      if (addCredentials && credentials.username && credentials.password) {
-        try {
-          await addToolCredential(
-            createdTool.id,
-            credentials.username,
-            credentials.password,
-            credentials.label || "Default Account"
-          );
-          toolWithIcon.credentials_count = 1;
-          toast.success(`${createdTool.name} added with credentials!`, {
-            description: `Tool and login credentials saved successfully.`,
-          });
-        } catch (credError) {
-          toast.warning(`Tool added but credentials failed: ${credError.message}`);
-        }
-      } else {
-        toast.success(`${createdTool.name} added successfully!`, {
-          description: `New tool added to ${createdTool.category} category.`,
-        });
-      }
+      toast.success(`${createdTool.name} added successfully!`, {
+        description: addCredentials ? "Tool and credentials saved securely." : `New tool added to ${createdTool.category} category.`,
+      });
 
       setTools([...tools, toolWithIcon]);
 
@@ -238,8 +223,9 @@ export const DashboardPage = ({ currentUser }) => {
         url: "",
         icon: "Globe",
       });
-      setCredentials({ label: "", username: "", password: "" });
+      setNewCredentials({ username: "", password: "", login_url: "", notes: "" });
       setAddCredentials(false);
+      setShowNewPassword(false);
       setIsAddDialogOpen(false);
     } catch (error) {
       toast.error(`Failed to add tool: ${error.message}`);
@@ -249,12 +235,36 @@ export const DashboardPage = ({ currentUser }) => {
   };
 
   const handleDeleteTool = async (toolId) => {
+    setTools(tools.filter((t) => t.id !== toolId));
+  };
+
+  // Refresh tools data
+  const handleToolUpdate = async () => {
     try {
-      await toolsAPI.delete(toolId);
-      setTools(tools.filter((t) => t.id !== toolId));
-      toast.success("Tool removed successfully!");
+      const toolsData = await toolsAPI.getAll();
+      let toolsWithIcons = toolsData.map(tool => ({
+        ...tool,
+        icon: iconMap[tool.icon] || Globe,
+        iconName: tool.icon,
+      }));
+
+      if (!isSuperAdmin && user) {
+        try {
+          const accessData = await usersAPI.getToolAccess(user.id);
+          const allowedToolIds = accessData.allowed_tools || [];
+          if (allowedToolIds.length > 0) {
+            toolsWithIcons = toolsWithIcons.filter(tool => allowedToolIds.includes(tool.id));
+          } else {
+            toolsWithIcons = [];
+          }
+        } catch {
+          toolsWithIcons = [];
+        }
+      }
+
+      setTools(toolsWithIcons);
     } catch (error) {
-      toast.error(`Failed to delete tool: ${error.message}`);
+      console.error("Failed to refresh tools:", error);
     }
   };
 
