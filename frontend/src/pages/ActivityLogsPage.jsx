@@ -57,10 +57,20 @@ const ActionIcon = ({ type, action }) => {
 };
 
 export const ActivityLogsPage = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [activityLogs, setActivityLogs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Check if user is Super Admin - redirect if not
+  useEffect(() => {
+    if (user && user.role !== "Super Administrator") {
+      toast.error("Access denied. Super Admin only.");
+      navigate("/");
+    }
+  }, [user, navigate]);
 
   // Fetch activity logs
   const fetchLogs = async () => {
