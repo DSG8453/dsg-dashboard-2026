@@ -1031,6 +1031,129 @@ export const UsersPage = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Tool Access Dialog */}
+      <Dialog open={toolAccessDialogOpen} onOpenChange={setToolAccessDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-primary" />
+              Manage Tool Access
+            </DialogTitle>
+            <DialogDescription>
+              Select which tools {toolAccessUser?.name} can access on the dashboard
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-4">
+            {/* User Info */}
+            <div className="p-3 rounded-lg bg-muted/50 flex items-center gap-3">
+              <Avatar className="h-10 w-10">
+                <AvatarFallback className="bg-primary/20 text-primary font-semibold">
+                  {toolAccessUser?.initials}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-semibold">{toolAccessUser?.name}</p>
+                <p className="text-sm text-muted-foreground">{toolAccessUser?.email}</p>
+              </div>
+            </div>
+
+            {/* Select All / Clear */}
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">
+                Available Tools ({allTools.length})
+              </Label>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={handleSelectAllTools}
+              >
+                {selectedTools.length === allTools.length ? "Clear All" : "Select All"}
+              </Button>
+            </div>
+
+            {/* Tools List */}
+            <ScrollArea className="h-[300px] pr-4">
+              <div className="space-y-2">
+                {allTools.map((tool) => (
+                  <div
+                    key={tool.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                      selectedTools.includes(tool.id) 
+                        ? "border-primary bg-primary/5" 
+                        : "border-border hover:bg-muted/50"
+                    }`}
+                    onClick={() => handleToggleTool(tool.id)}
+                  >
+                    <Checkbox 
+                      checked={selectedTools.includes(tool.id)}
+                      onCheckedChange={() => handleToggleTool(tool.id)}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium">{tool.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {tool.category} • {tool.description?.substring(0, 50)}...
+                      </p>
+                    </div>
+                    {selectedTools.includes(tool.id) && (
+                      <Check className="h-4 w-4 text-primary shrink-0" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+
+            {/* Summary */}
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+              <p className="text-sm">
+                <span className="font-semibold text-primary">{selectedTools.length}</span> of{" "}
+                <span className="font-semibold">{allTools.length}</span> tools selected
+              </p>
+              {selectedTools.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  User will not see any tools on dashboard
+                </p>
+              )}
+              {selectedTools.length === allTools.length && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  User has access to all tools
+                </p>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setToolAccessDialogOpen(false)}
+                disabled={isSaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="gradient"
+                className="flex-1"
+                onClick={handleSaveToolAccess}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check className="mr-2 h-4 w-4" />
+                    Save Access
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
