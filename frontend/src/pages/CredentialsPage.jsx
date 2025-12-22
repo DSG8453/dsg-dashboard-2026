@@ -287,7 +287,7 @@ export const CredentialsPage = () => {
                       <Button
                         variant="ghost"
                         size="iconSm"
-                        onClick={() => copyToClipboard(userItem.email, "Email")}
+                        onClick={() => handleCopy(userItem.email, "Email")}
                       >
                         <Copy className="h-3 w-3" />
                       </Button>
@@ -313,7 +313,7 @@ export const CredentialsPage = () => {
                         <Button
                           variant="ghost"
                           size="iconSm"
-                          onClick={() => copyToClipboard(userItem.password, "Password")}
+                          onClick={() => handleCopy(userItem.password, "Password")}
                         >
                           <Copy className="h-3 w-3" />
                         </Button>
