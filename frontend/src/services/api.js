@@ -197,6 +197,23 @@ export const devicesAPI = {
     fetchAPI(`/api/devices/${id}`, { method: 'DELETE' }),
 };
 
+// Activity Logs API
+export const activityLogsAPI = {
+  getAll: (limit = 50, activityType = null) => {
+    let url = `/api/activity-logs?limit=${limit}`;
+    if (activityType && activityType !== 'all') {
+      url += `&activity_type=${activityType}`;
+    }
+    return fetchAPI(url);
+  },
+  
+  create: (logData) => 
+    fetchAPI('/api/activity-logs', {
+      method: 'POST',
+      body: JSON.stringify(logData),
+    }),
+};
+
 export default {
   auth: authAPI,
   users: usersAPI,
@@ -205,4 +222,5 @@ export default {
   issues: issuesAPI,
   settings: settingsAPI,
   devices: devicesAPI,
+  activityLogs: activityLogsAPI,
 };
