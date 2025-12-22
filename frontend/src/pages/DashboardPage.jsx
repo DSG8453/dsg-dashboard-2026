@@ -262,12 +262,14 @@ export const DashboardPage = ({ currentUser }) => {
     <div className="animate-fade-in">
       <HeaderCard currentUser={currentUser} onAddTool={handleAddTool} />
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 stagger-children">
-        {stats.map((stat, index) => (
-          <StatCard key={index} {...stat} />
-        ))}
-      </div>
+      {/* Stats Grid - Hidden for regular users */}
+      {!isRegularUser && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 stagger-children">
+          {stats.map((stat, index) => (
+            <StatCard key={index} {...stat} />
+          ))}
+        </div>
+      )}
 
       {/* Tools Section */}
       <div className="mb-6">
