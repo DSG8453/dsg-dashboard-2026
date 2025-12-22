@@ -60,22 +60,25 @@ export const Navbar = ({ currentUser }) => {
       ];
     }
 
-    // Base navigation for Admin (no Devices - Super Admin only)
-    const baseNav = [
+    // Admin navigation (limited)
+    if (!isSuperAdmin) {
+      return [
+        { name: "Dashboard", href: "/", icon: LayoutDashboard },
+        { name: "Profile", href: "/profile", icon: User },
+        { name: "Users", href: "/users", icon: Users },
+      ];
+    }
+
+    // Super Admin gets full navigation
+    return [
       { name: "Dashboard", href: "/", icon: LayoutDashboard },
       { name: "Profile", href: "/profile", icon: User },
       { name: "Users", href: "/users", icon: Users },
       { name: "Credentials", href: "/credentials", icon: Key },
       { name: "IP Management", href: "/ip-management", icon: Globe },
+      { name: "Devices", href: "/devices", icon: Smartphone },
+      { name: "Activity Logs", href: "/activity-logs", icon: FileText },
     ];
-
-    // Super Admin gets Devices and Activity Logs
-    if (isSuperAdmin) {
-      baseNav.push({ name: "Devices", href: "/devices", icon: Smartphone });
-      baseNav.push({ name: "Activity Logs", href: "/activity-logs", icon: FileText });
-    }
-
-    return baseNav;
   };
 
   const navigation = getNavigation();
