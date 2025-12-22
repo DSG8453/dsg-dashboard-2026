@@ -174,8 +174,15 @@ async def update_user(user_id: str, user_data: UserUpdate, current_user: dict = 
 
 @router.delete("/{user_id}")
 async def delete_user(user_id: str, current_user: dict = Depends(require_admin)):
-    """Delete user (admin only)"""
+    """Delete user (Super Admin only)"""
     db = await get_db()
+    
+    # Only Super Admin can delete users
+    if current_user["role"] != "Super Administrator":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Super Administrator can delete users"
+        )
     
     # Can't delete yourself
     if current_user["id"] == user_id:
@@ -189,6 +196,13 @@ async def delete_user(user_id: str, current_user: dict = Depends(require_admin))
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
+        )
+    
+    # Can't delete other Super Admins or Admins
+    if user.get("role") in ["Super Administrator", "Administrator"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot delete administrators"
         )
     
     # Delete user's credentials too
