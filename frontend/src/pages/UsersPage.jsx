@@ -131,6 +131,14 @@ export const UsersPage = () => {
   const [selectedTools, setSelectedTools] = useState([]);
   const [isLoadingTools, setIsLoadingTools] = useState(false);
 
+  // User assignment to Admin (Super Admin only)
+  const [assignUsersDialogOpen, setAssignUsersDialogOpen] = useState(false);
+  const [assignUsersAdmin, setAssignUsersAdmin] = useState(null);
+  const [selectedUsersToAssign, setSelectedUsersToAssign] = useState([]);
+
+  // Get assigned users for current admin
+  const [myAssignedUsers, setMyAssignedUsers] = useState([]);
+
   // Check if current email is external (non-approved domain)
   const isExternalEmail = newUser.email && newUser.email.includes("@") && !isApprovedDomain(newUser.email);
 
