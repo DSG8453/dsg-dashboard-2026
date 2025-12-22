@@ -759,8 +759,16 @@ export const UsersPage = () => {
                         </DropdownMenuItem>
                       )}
 
-                      {/* Manage Tool Access - Only for Users the current user can manage */}
-                      {user.role === "User" && canManageUser(user.id) && (
+                      {/* Manage Tool Access - Super Admin can assign to Admin & User */}
+                      {isSuperAdmin && (user.role === "User" || user.role === "Administrator") && user.email !== "info@dsgtransport.net" && (
+                        <DropdownMenuItem onClick={() => handleOpenToolAccess(user)}>
+                          <Package className="mr-2 h-4 w-4" />
+                          Manage Tool Access
+                        </DropdownMenuItem>
+                      )}
+
+                      {/* Admin can manage tools for Users assigned to them */}
+                      {!isSuperAdmin && isAdmin && user.role === "User" && canManageUser(user.id) && (
                         <DropdownMenuItem onClick={() => handleOpenToolAccess(user)}>
                           <Package className="mr-2 h-4 w-4" />
                           Manage Tool Access
