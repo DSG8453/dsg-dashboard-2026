@@ -41,6 +41,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { usersAPI } from "@/services/api";
+import { copyToClipboard } from "@/lib/utils";
 import { 
   Search, 
   Key, 
