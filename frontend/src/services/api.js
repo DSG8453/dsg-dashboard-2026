@@ -38,6 +38,17 @@ export const authAPI = {
       body: JSON.stringify({ email, password }),
     }),
   
+  verifyOtp: (data) =>
+    fetchAPI('/api/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  resendOtp: (tempToken) =>
+    fetchAPI(`/api/auth/resend-otp?temp_token=${encodeURIComponent(tempToken)}`, {
+      method: 'POST',
+    }),
+  
   getMe: () => fetchAPI('/api/auth/me'),
   
   logout: () => fetchAPI('/api/auth/logout', { method: 'POST' }),
