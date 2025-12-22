@@ -710,11 +710,37 @@ export const UsersPage = () => {
               User Created Successfully!
             </DialogTitle>
             <DialogDescription>
-              Share these login credentials with {createdUserCredentials?.name}
+              {createdUserCredentials?.emailSent 
+                ? `Invitation email sent to ${createdUserCredentials?.email}`
+                : `Share these login credentials with ${createdUserCredentials?.name}`
+              }
             </DialogDescription>
           </DialogHeader>
           {createdUserCredentials && (
             <div className="space-y-4 py-4">
+              {/* Email Status Banner */}
+              {createdUserCredentials.emailSent ? (
+                <div className="p-3 rounded-lg bg-success/10 border border-success/30 flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-success" />
+                  <div>
+                    <p className="font-medium text-success">Email Sent!</p>
+                    <p className="text-xs text-muted-foreground">
+                      Invitation sent from info@dsgtransport.net
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-warning" />
+                  <div>
+                    <p className="font-medium text-warning">Email Not Sent</p>
+                    <p className="text-xs text-muted-foreground">
+                      Please share credentials manually via WhatsApp or copy
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="p-4 rounded-lg bg-muted/50 border border-border space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Email:</span>
@@ -766,7 +792,10 @@ export const UsersPage = () => {
               </div>
 
               <p className="text-xs text-center text-muted-foreground">
-                Make sure to share these credentials securely with the user
+                {createdUserCredentials.emailSent 
+                  ? "You can also share credentials manually if needed"
+                  : "Make sure to share these credentials securely with the user"
+                }
               </p>
             </div>
           )}
