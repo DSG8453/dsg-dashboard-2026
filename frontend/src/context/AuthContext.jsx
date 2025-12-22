@@ -188,8 +188,8 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Check if device is approved (admins are always approved)
-  const isDeviceApproved = user?.role === "Administrator" || deviceStatus === "approved";
+  // Check if device is approved (Super Admin and Admin are always approved)
+  const isDeviceApproved = user?.role === "Super Administrator" || user?.role === "Administrator" || deviceStatus === "approved";
 
   const value = {
     user,
