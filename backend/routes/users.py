@@ -247,6 +247,16 @@ async def suspend_user(user_id: str, current_user: dict = Depends(require_admin)
             detail="User not found"
         )
     
+    # Check if Admin can manage this user
+    if current_user["role"] == "Administrator":
+        admin_data = await db.users.find_one({"_id": ObjectId(current_user["id"])})
+        assigned_users = admin_data.get("assigned_users", []) if admin_data else []
+        if user_id not in assigned_users:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only manage users assigned to you"
+            )
+    
     await db.users.update_one(
         {"_id": ObjectId(user_id)},
         {"$set": {"status": "Suspended"}}
@@ -269,9 +279,36 @@ async def reactivate_user(user_id: str, current_user: dict = Depends(require_adm
     """Reactivate suspended user (admin only)"""
     db = await get_db()
     
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Check if Admin can manage this user
+    if current_user["role"] == "Administrator":
+        admin_data = await db.users.find_one({"_id": ObjectId(current_user["id"])})
+        assigned_users = admin_data.get("assigned_users", []) if admin_data else []
+        if user_id not in assigned_users:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only manage users assigned to you"
+            )
+    
     await db.users.update_one(
         {"_id": ObjectId(user_id)},
         {"$set": {"status": "Active"}}
+    )
+    
+    # Log activity
+    await log_activity(
+        user_email=current_user["email"],
+        user_name=current_user.get("name", current_user["email"]),
+        action="Reactivated User",
+        target=user.get("name", user["email"]),
+        details=f"User {user['email']} was reactivated by {current_user['email']}",
+        activity_type=ActivityType.ADMIN
     )
     
     return {"message": "User reactivated"}
