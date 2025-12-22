@@ -501,10 +501,30 @@ export const UsersPage = () => {
                   <Badge variant={getAccessBadge(user.access_level)}>
                     {accessLevels.find((l) => l.value === user.access_level)?.label || "Standard"}
                   </Badge>
+                  {/* Tool count badge */}
+                  {user.allowed_tools && user.allowed_tools.length > 0 && (
+                    <Badge variant="outline" className="gap-1">
+                      <Wrench className="h-3 w-3" />
+                      {user.allowed_tools.length} tools
+                    </Badge>
+                  )}
                 </div>
 
                 {/* Actions */}
                 <div className="flex items-center gap-2">
+                  {/* Quick Tool Access Button */}
+                  {user.role !== "Administrator" && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="gap-1 hidden sm:flex"
+                      onClick={() => handleOpenToolAccess(user)}
+                    >
+                      <Package className="h-4 w-4" />
+                      Tools
+                    </Button>
+                  )}
+
                   {/* Quick Access Level Change */}
                   <Select
                     value={user.access_level}
@@ -536,6 +556,13 @@ export const UsersPage = () => {
                         <Edit className="mr-2 h-4 w-4" />
                         Edit User
                       </DropdownMenuItem>
+
+                      {user.role !== "Administrator" && (
+                        <DropdownMenuItem onClick={() => handleOpenToolAccess(user)}>
+                          <Package className="mr-2 h-4 w-4" />
+                          Manage Tool Access
+                        </DropdownMenuItem>
+                      )}
 
                       {user.status === "Pending" && (
                         <DropdownMenuItem onClick={() => handleResendInvitation(user)}>
