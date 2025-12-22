@@ -18,27 +18,13 @@ import {
   LayoutDashboard,
   User,
   Users,
-  Key,
-  Shield,
   Smartphone,
-  FileText,
   LogOut,
   Menu,
   ChevronDown,
   HeadphonesIcon,
   TicketIcon,
-  AlertCircle,
 } from "lucide-react";
-
-const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Profile", href: "/profile", icon: User },
-  { name: "Users", href: "/users", icon: Users },
-  { name: "Credentials", href: "/credentials", icon: Key },
-  { name: "IP Management", href: "/ip-management", icon: Shield },
-  { name: "Devices", href: "/devices", icon: Smartphone },
-  { name: "Activity Logs", href: "/activity-logs", icon: FileText },
-];
 
 export const Navbar = ({ currentUser }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -46,18 +32,52 @@ export const Navbar = ({ currentUser }) => {
   const { issues } = useSupport();
   const navigate = useNavigate();
 
-  const isAdmin = currentUser?.role === "Administrator";
+  // Role checks
+  const isSuperAdmin = currentUser?.role === "Super Administrator";
+  const isAdmin = currentUser?.role === "Administrator" || isSuperAdmin;
+  const isUser = currentUser?.role === "User";
   
   // Count open issues for badge
-  const userIssues = isAdmin 
+  const userIssues = isSuperAdmin 
     ? issues 
-    : issues.filter((i) => i.userId === currentUser?.id);
+    : issues.filter((i) => i.user_id === currentUser?.id);
   const openIssuesCount = userIssues.filter((i) => i.status !== "resolved").length;
 
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
+
+  // Navigation items based on role
+  const getNavigation = () => {
+    // Base navigation - Dashboard only for all users
+    const baseNav = [
+      { name: "Dashboard", href: "/", icon: LayoutDashboard },
+    ];
+
+    // Super Admin sees everything
+    if (isSuperAdmin) {
+      return [
+        ...baseNav,
+        { name: "Users", href: "/users", icon: Users },
+        { name: "Devices", href: "/devices", icon: Smartphone },
+      ];
+    }
+
+    // Admin sees Users (to assign their tools) and Devices
+    if (isAdmin) {
+      return [
+        ...baseNav,
+        { name: "Users", href: "/users", icon: Users },
+        { name: "Devices", href: "/devices", icon: Smartphone },
+      ];
+    }
+
+    // Regular users only see Dashboard
+    return baseNav;
+  };
+
+  const navigation = getNavigation();
 
   return (
     <nav className="sticky top-0 z-50 glass-card-strong shadow-lg">
@@ -89,7 +109,7 @@ export const Navbar = ({ currentUser }) => {
               </NavLink>
             ))}
 
-            {/* Issues Button - For both admin and users */}
+            {/* Issues Button - For all users */}
             <NavLink to="/issues">
               {({ isActive }) => (
                 <Button
@@ -99,7 +119,7 @@ export const Navbar = ({ currentUser }) => {
                 >
                   <TicketIcon className="h-4 w-4" />
                   <span className="hidden xl:inline">
-                    {isAdmin ? "Issues" : "My Issues"}
+                    {isSuperAdmin ? "All Issues" : "My Issues"}
                   </span>
                   {openIssuesCount > 0 && (
                     <Badge 
@@ -113,8 +133,8 @@ export const Navbar = ({ currentUser }) => {
               )}
             </NavLink>
 
-            {/* Admin-only Support Management */}
-            {isAdmin && (
+            {/* Super Admin-only Support Management */}
+            {isSuperAdmin && (
               <NavLink to="/support">
                 {({ isActive }) => (
                   <Button
@@ -159,20 +179,16 @@ export const Navbar = ({ currentUser }) => {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/profile")}>
-                  <User className="mr-2 h-4 w-4" />
-                  Profile
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate("/issues")}>
                   <TicketIcon className="mr-2 h-4 w-4" />
-                  {isAdmin ? "All Issues" : "My Issues"}
+                  {isSuperAdmin ? "All Issues" : "My Issues"}
                   {openIssuesCount > 0 && (
                     <Badge variant="destructive" className="ml-auto">
                       {openIssuesCount}
                     </Badge>
                   )}
                 </DropdownMenuItem>
-                {isAdmin && (
+                {isSuperAdmin && (
                   <DropdownMenuItem onClick={() => navigate("/support")}>
                     <HeadphonesIcon className="mr-2 h-4 w-4" />
                     Support Management
@@ -237,7 +253,7 @@ export const Navbar = ({ currentUser }) => {
                           className="w-full justify-start gap-3"
                         >
                           <TicketIcon className="h-5 w-5" />
-                          {isAdmin ? "All Issues" : "My Issues"}
+                          {isSuperAdmin ? "All Issues" : "My Issues"}
                           {openIssuesCount > 0 && (
                             <Badge variant="destructive" className="ml-auto">
                               {openIssuesCount}
@@ -247,8 +263,8 @@ export const Navbar = ({ currentUser }) => {
                       )}
                     </NavLink>
 
-                    {/* Admin Support - Mobile */}
-                    {isAdmin && (
+                    {/* Super Admin Support - Mobile */}
+                    {isSuperAdmin && (
                       <NavLink to="/support" onClick={() => setMobileOpen(false)}>
                         {({ isActive }) => (
                           <Button
