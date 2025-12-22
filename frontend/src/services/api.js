@@ -49,8 +49,8 @@ export const usersAPI = {
   
   getById: (id) => fetchAPI(`/api/users/${id}`),
   
-  create: (userData) => 
-    fetchAPI('/api/users', {
+  create: (userData, sendEmail = false) => 
+    fetchAPI(`/api/users?send_email=${sendEmail}`, {
       method: 'POST',
       body: JSON.stringify(userData),
     }),
