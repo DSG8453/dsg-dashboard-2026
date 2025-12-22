@@ -103,11 +103,20 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     }
 
 async def require_admin(current_user: dict = Depends(get_current_user)):
-    """Dependency to require admin role"""
-    if current_user["role"] != "Administrator":
+    """Dependency to require admin role (includes Super Admin)"""
+    if current_user["role"] not in ["Administrator", "Super Administrator"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
+        )
+    return current_user
+
+async def require_super_admin(current_user: dict = Depends(get_current_user)):
+    """Dependency to require super admin role"""
+    if current_user["role"] != "Super Administrator":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super Admin access required"
         )
     return current_user
 
