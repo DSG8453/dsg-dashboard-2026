@@ -74,19 +74,29 @@ const formatDate = (dateString) => {
 
 export const DevicesPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [devices, setDevices] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Super Admin and Admin can manage devices
-  const canManageDevices = user?.role === "Super Administrator" || user?.role === "Administrator";
+  // Only Super Admin can access Devices page
+  const isSuperAdmin = user?.role === "Super Administrator";
+
+  // Redirect non-Super Admin users
+  useEffect(() => {
+    if (user && !isSuperAdmin) {
+      toast.error("Access denied. Super Admin only.");
+      navigate("/");
+    }
+  }, [user, isSuperAdmin, navigate]);
 
   // Fetch devices
   const fetchDevices = async () => {
+    if (!isSuperAdmin) return;
     try {
-      const data = canManageDevices ? await devicesAPI.getAll() : await devicesAPI.getMyDevices();
+      const data = await devicesAPI.getAll();
       setDevices(data);
     } catch (error) {
       toast.error("Failed to load devices");
@@ -97,8 +107,10 @@ export const DevicesPage = () => {
   };
 
   useEffect(() => {
-    fetchDevices();
-  }, [canManageDevices]);
+    if (isSuperAdmin) {
+      fetchDevices();
+    }
+  }, [isSuperAdmin]);
 
   const handleManageDevice = (device) => {
     setSelectedDevice(device);
