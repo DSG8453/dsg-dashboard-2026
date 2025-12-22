@@ -296,7 +296,12 @@ export const DashboardPage = ({ currentUser }) => {
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 stagger-children">
           {tools.map((tool) => (
-            <ToolCard key={tool.id} tool={tool} onDelete={isSuperAdmin ? handleDeleteTool : null} />
+            <ToolCard 
+              key={tool.id} 
+              tool={tool} 
+              onDelete={isSuperAdmin ? handleDeleteTool : null}
+              onUpdate={handleToolUpdate}
+            />
           ))}
           {tools.length === 0 && !isSuperAdmin && (
             <div className="col-span-full text-center py-12 text-muted-foreground">
