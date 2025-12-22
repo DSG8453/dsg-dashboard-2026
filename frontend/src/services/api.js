@@ -159,6 +159,35 @@ export const settingsAPI = {
     }),
 };
 
+// Devices API
+export const devicesAPI = {
+  getAll: () => fetchAPI('/api/devices'),
+  
+  getPending: () => fetchAPI('/api/devices/pending'),
+  
+  getMyDevices: () => fetchAPI('/api/devices/my-devices'),
+  
+  checkDevice: (fingerprint) => fetchAPI(`/api/devices/check/${fingerprint}`),
+  
+  register: (deviceData) => 
+    fetchAPI('/api/devices/register', {
+      method: 'POST',
+      body: JSON.stringify(deviceData),
+    }),
+  
+  approve: (id) => 
+    fetchAPI(`/api/devices/${id}/approve`, { method: 'PUT' }),
+  
+  reject: (id) => 
+    fetchAPI(`/api/devices/${id}/reject`, { method: 'PUT' }),
+  
+  revoke: (id) => 
+    fetchAPI(`/api/devices/${id}/revoke`, { method: 'PUT' }),
+  
+  delete: (id) => 
+    fetchAPI(`/api/devices/${id}`, { method: 'DELETE' }),
+};
+
 export default {
   auth: authAPI,
   users: usersAPI,
@@ -166,4 +195,5 @@ export default {
   credentials: credentialsAPI,
   issues: issuesAPI,
   settings: settingsAPI,
+  devices: devicesAPI,
 };
