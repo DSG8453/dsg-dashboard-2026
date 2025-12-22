@@ -228,6 +228,13 @@ async def reject_device(device_id: str, current_user: dict = Depends(require_adm
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
     
+    # Check if Admin can manage this device
+    if not await can_admin_manage_device(current_user, device, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only manage devices for users assigned to you"
+        )
+    
     await db.devices.update_one(
         {"_id": obj_id},
         {"$set": {"status": "rejected"}}
@@ -253,6 +260,13 @@ async def revoke_device(device_id: str, current_user: dict = Depends(require_adm
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
     
+    # Check if Admin can manage this device
+    if not await can_admin_manage_device(current_user, device, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only manage devices for users assigned to you"
+        )
+    
     await db.devices.update_one(
         {"_id": obj_id},
         {"$set": {"status": "revoked"}}
@@ -266,8 +280,15 @@ async def revoke_device(device_id: str, current_user: dict = Depends(require_adm
 
 @router.delete("/{device_id}")
 async def delete_device(device_id: str, current_user: dict = Depends(require_admin)):
-    """Delete a device (admin only)"""
+    """Delete a device (Super Admin only)"""
     db = await get_db()
+    
+    # Only Super Admin can delete devices
+    if current_user["role"] != "Super Administrator":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Super Administrator can delete devices"
+        )
     
     try:
         obj_id = ObjectId(device_id)
