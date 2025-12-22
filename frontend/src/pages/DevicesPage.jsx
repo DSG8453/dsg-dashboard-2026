@@ -79,12 +79,13 @@ export const DevicesPage = () => {
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const isAdmin = user?.role === "Administrator";
+  // Super Admin and Admin can manage devices
+  const canManageDevices = user?.role === "Super Administrator" || user?.role === "Administrator";
 
   // Fetch devices
   const fetchDevices = async () => {
     try {
-      const data = isAdmin ? await devicesAPI.getAll() : await devicesAPI.getMyDevices();
+      const data = canManageDevices ? await devicesAPI.getAll() : await devicesAPI.getMyDevices();
       setDevices(data);
     } catch (error) {
       toast.error("Failed to load devices");
@@ -96,7 +97,7 @@ export const DevicesPage = () => {
 
   useEffect(() => {
     fetchDevices();
-  }, [isAdmin]);
+  }, [canManageDevices]);
 
   const handleManageDevice = (device) => {
     setSelectedDevice(device);
