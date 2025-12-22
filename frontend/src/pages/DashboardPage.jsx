@@ -102,7 +102,8 @@ export const DashboardPage = ({ currentUser }) => {
     password: "",
   });
 
-  const isAdmin = user?.role === "Administrator";
+  const isAdmin = user?.role === "Administrator" || user?.role === "Super Administrator";
+  const isRegularUser = user?.role === "User";
 
   // Fetch tools and users count on mount
   useEffect(() => {
