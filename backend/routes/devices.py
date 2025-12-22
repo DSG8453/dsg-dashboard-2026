@@ -148,8 +148,8 @@ async def register_device(
         "last_login": now
     }
     
-    # Auto-approve for admins
-    if current_user.get("role") == "Administrator":
+    # Auto-approve for Super Admin and Admin
+    if current_user.get("role") in ["Super Administrator", "Administrator"]:
         new_device["status"] = "approved"
         new_device["approved_at"] = now
         new_device["approved_by"] = "Auto-approved (Admin)"
