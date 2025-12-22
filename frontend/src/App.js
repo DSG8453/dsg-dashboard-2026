@@ -1,5 +1,5 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { SupportProvider } from "@/context/SupportContext";
@@ -8,6 +8,7 @@ import { SupportProvider } from "@/context/SupportContext";
 import { Navbar } from "@/components/layout/Navbar";
 import { WhatsAppSupport } from "@/components/support/WhatsAppSupport";
 import { DevicePendingApproval } from "@/components/auth/DevicePendingApproval";
+import { AuthCallback } from "@/components/auth/AuthCallback";
 
 // Page Components
 import { LoginPage } from "@/pages/LoginPage";
