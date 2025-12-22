@@ -64,6 +64,7 @@ import {
 
 export const CredentialsPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isSuperAdmin = user?.role === "Super Administrator";
   
   const [users, setUsers] = useState([]);
@@ -78,6 +79,14 @@ export const CredentialsPage = () => {
   const [newPassword, setNewPassword] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [generatedPassword, setGeneratedPassword] = useState(null);
+
+  // Redirect non-Super Admin users
+  useEffect(() => {
+    if (user && !isSuperAdmin) {
+      toast.error("Access denied. Super Admin only.");
+      navigate("/");
+    }
+  }, [user, isSuperAdmin, navigate]);
 
   // Fetch user credentials
   useEffect(() => {
