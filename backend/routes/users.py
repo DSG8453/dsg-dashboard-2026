@@ -334,6 +334,16 @@ async def update_tool_access(
             detail="User not found"
         )
     
+    # Check if Admin can manage this user
+    if current_user["role"] == "Administrator":
+        admin_data = await db.users.find_one({"_id": ObjectId(current_user["id"])})
+        assigned_users = admin_data.get("assigned_users", []) if admin_data else []
+        if user_id not in assigned_users:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only assign tools to users assigned to you"
+            )
+    
     # Update allowed tools
     await db.users.update_one(
         {"_id": obj_id},
