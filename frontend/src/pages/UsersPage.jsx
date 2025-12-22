@@ -109,6 +109,13 @@ export const UsersPage = () => {
     access_level: "standard" 
   });
   const [editUser, setEditUser] = useState(null);
+  
+  // Tool access management
+  const [toolAccessDialogOpen, setToolAccessDialogOpen] = useState(false);
+  const [toolAccessUser, setToolAccessUser] = useState(null);
+  const [allTools, setAllTools] = useState([]);
+  const [selectedTools, setSelectedTools] = useState([]);
+  const [isLoadingTools, setIsLoadingTools] = useState(false);
 
   // Check if current email is external (non-approved domain)
   const isExternalEmail = newUser.email && newUser.email.includes("@") && !isApprovedDomain(newUser.email);
@@ -126,6 +133,7 @@ export const UsersPage = () => {
   // Fetch users on mount
   useEffect(() => {
     fetchUsers();
+    fetchTools();
   }, []);
 
   const fetchUsers = async () => {
