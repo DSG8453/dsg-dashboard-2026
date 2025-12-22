@@ -178,8 +178,8 @@ async def can_admin_manage_device(current_user: dict, device: dict, db) -> bool:
     return False
 
 @router.put("/{device_id}/approve", response_model=dict)
-async def approve_device(device_id: str, current_user: dict = Depends(require_admin)):
-    """Approve a device (admin only)"""
+async def approve_device(device_id: str, current_user: dict = Depends(require_super_admin)):
+    """Approve a device (Super Admin only)"""
     db = await get_db()
     
     try:
@@ -190,13 +190,6 @@ async def approve_device(device_id: str, current_user: dict = Depends(require_ad
     device = await db.devices.find_one({"_id": obj_id})
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
-    
-    # Check if Admin can manage this device
-    if not await can_admin_manage_device(current_user, device, db):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only manage devices for users assigned to you"
-        )
     
     now = datetime.now(timezone.utc).isoformat()
     await db.devices.update_one(
@@ -215,8 +208,8 @@ async def approve_device(device_id: str, current_user: dict = Depends(require_ad
     }
 
 @router.put("/{device_id}/reject", response_model=dict)
-async def reject_device(device_id: str, current_user: dict = Depends(require_admin)):
-    """Reject a device (admin only)"""
+async def reject_device(device_id: str, current_user: dict = Depends(require_super_admin)):
+    """Reject a device (Super Admin only)"""
     db = await get_db()
     
     try:
@@ -227,13 +220,6 @@ async def reject_device(device_id: str, current_user: dict = Depends(require_adm
     device = await db.devices.find_one({"_id": obj_id})
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
-    
-    # Check if Admin can manage this device
-    if not await can_admin_manage_device(current_user, device, db):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only manage devices for users assigned to you"
-        )
     
     await db.devices.update_one(
         {"_id": obj_id},
@@ -247,8 +233,8 @@ async def reject_device(device_id: str, current_user: dict = Depends(require_adm
     }
 
 @router.put("/{device_id}/revoke", response_model=dict)
-async def revoke_device(device_id: str, current_user: dict = Depends(require_admin)):
-    """Revoke device access (admin only)"""
+async def revoke_device(device_id: str, current_user: dict = Depends(require_super_admin)):
+    """Revoke device access (Super Admin only)"""
     db = await get_db()
     
     try:
@@ -259,13 +245,6 @@ async def revoke_device(device_id: str, current_user: dict = Depends(require_adm
     device = await db.devices.find_one({"_id": obj_id})
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
-    
-    # Check if Admin can manage this device
-    if not await can_admin_manage_device(current_user, device, db):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only manage devices for users assigned to you"
-        )
     
     await db.devices.update_one(
         {"_id": obj_id},
