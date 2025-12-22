@@ -379,13 +379,30 @@ export const UsersPage = () => {
     }
   };
 
-  const copyCredentials = () => {
+  const copyCredentials = async () => {
     if (!createdUserCredentials) return;
     const text = `DSG Transport Portal Login\n\nEmail: ${createdUserCredentials.email}\nPassword: ${createdUserCredentials.password}\n\nLogin at: ${window.location.origin}`;
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    toast.success("Credentials copied to clipboard!");
-    setTimeout(() => setCopied(false), 2000);
+    
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      setCopied(true);
+      toast.success("Credentials copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast.info("Copy manually: " + createdUserCredentials.email, { duration: 5000 });
+    }
   };
 
   const shareViaWhatsApp = () => {
