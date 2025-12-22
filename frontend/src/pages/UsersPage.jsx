@@ -60,6 +60,7 @@ import {
   Wrench,
   Package,
   Crown,
+  Users,
 } from "lucide-react";
 
 import { useSupport } from "@/context/SupportContext";
