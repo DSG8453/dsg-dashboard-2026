@@ -695,3 +695,67 @@ async def toggle_user_2sv(
         "two_sv_enabled": enabled
     }
 
+
+@router.put("/{user_id}/change-role")
+async def change_user_role(
+    user_id: str,
+    new_role: str,
+    current_user: dict = Depends(require_admin)
+):
+    """Change user role (Super Admin only)"""
+    db = await get_db()
+    
+    # Only Super Admin can change roles
+    if current_user["role"] != "Super Administrator":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Super Administrator can change user roles"
+        )
+    
+    # Validate role
+    valid_roles = ["Administrator", "User"]
+    if new_role not in valid_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role. Must be one of: {valid_roles}"
+        )
+    
+    try:
+        obj_id = ObjectId(user_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+    
+    user = await db.users.find_one({"_id": obj_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Cannot change the main Super Admin's role
+    if user["email"] == "info@dsgtransport.net":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot change the role of the primary Super Administrator"
+        )
+    
+    old_role = user.get("role", "User")
+    
+    await db.users.update_one(
+        {"_id": obj_id},
+        {"$set": {"role": new_role}}
+    )
+    
+    # Log activity
+    await log_activity(
+        user_email=current_user["email"],
+        user_name=current_user.get("name", current_user["email"]),
+        action="Changed User Role",
+        target=user.get("name", user["email"]),
+        details=f"Role changed from {old_role} to {new_role} for {user['email']}",
+        activity_type=ActivityType.ADMIN
+    )
+    
+    return {
+        "message": f"Role updated for {user['name']}",
+        "old_role": old_role,
+        "new_role": new_role
+    }
+
