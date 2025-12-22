@@ -49,6 +49,7 @@ app.include_router(tools_router, prefix="/api/tools", tags=["Tools"])
 app.include_router(credentials_router, prefix="/api/credentials", tags=["Credentials"])
 app.include_router(issues_router, prefix="/api/issues", tags=["Issues"])
 app.include_router(settings_router, prefix="/api/settings", tags=["Settings"])
+app.include_router(devices_router, prefix="/api/devices", tags=["Devices"])
 
 @app.get("/api/health")
 async def health_check():
