@@ -102,7 +102,8 @@ export const DashboardPage = ({ currentUser }) => {
     password: "",
   });
 
-  const isAdmin = user?.role === "Administrator" || user?.role === "Super Administrator";
+  const isSuperAdmin = user?.role === "Super Administrator";
+  const isAdmin = user?.role === "Administrator";
   const isRegularUser = user?.role === "User";
 
   // Fetch tools and users count on mount
@@ -118,26 +119,31 @@ export const DashboardPage = ({ currentUser }) => {
           iconName: tool.icon,
         }));
 
-        // Filter tools based on user's allowed_tools (admins see all)
-        if (!isAdmin && user) {
+        // Super Admin sees ALL tools
+        // Admin and User only see ASSIGNED tools
+        if (!isSuperAdmin && user) {
           try {
             const accessData = await usersAPI.getToolAccess(user.id);
             const allowedToolIds = accessData.allowed_tools || [];
             
-            // If user has specific tools assigned, filter. If empty array, show all (default behavior)
+            // Filter to only show assigned tools
             if (allowedToolIds.length > 0) {
               toolsWithIcons = toolsWithIcons.filter(tool => allowedToolIds.includes(tool.id));
+            } else {
+              // If no tools assigned, show empty
+              toolsWithIcons = [];
             }
           } catch {
-            // If can't fetch access, show all tools (fallback)
-            console.log("Could not fetch tool access, showing all tools");
+            // If can't fetch access, show no tools for safety
+            console.log("Could not fetch tool access");
+            toolsWithIcons = [];
           }
         }
 
         setTools(toolsWithIcons);
 
-        // Get users count if admin/super admin
-        if (user?.role === "Administrator" || user?.role === "Super Administrator") {
+        // Get users count only for Super Admin
+        if (isSuperAdmin) {
           try {
             const usersData = await usersAPI.getAll();
             setUsersCount(usersData.length);
@@ -156,7 +162,7 @@ export const DashboardPage = ({ currentUser }) => {
     if (user) {
       fetchData();
     }
-  }, [user, isAdmin]);
+  }, [user, isSuperAdmin]);
 
   const stats = [
     { value: String(tools.length), label: "Active Tools", variant: "blue", icon: Wrench },
