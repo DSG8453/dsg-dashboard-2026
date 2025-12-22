@@ -395,8 +395,8 @@ export const DashboardPage = ({ currentUser }) => {
               />
             </div>
 
-            {/* Admin: Add Credentials Section */}
-            {isAdmin && (
+            {/* Super Admin: Add Credentials Section */}
+            {isSuperAdmin && (
               <>
                 <Separator />
                 <div className="space-y-4">
@@ -407,7 +407,7 @@ export const DashboardPage = ({ currentUser }) => {
                         Add Login Credentials
                       </Label>
                       <p className="text-xs text-muted-foreground">
-                        Save login credentials for this tool
+                        Store login credentials securely (Super Admin only)
                       </p>
                     </div>
                     <Switch
@@ -419,37 +419,59 @@ export const DashboardPage = ({ currentUser }) => {
                   {addCredentials && (
                     <div className="space-y-3 p-4 rounded-lg border border-border bg-muted/30">
                       <div className="space-y-2">
-                        <Label htmlFor="credLabel">Account Label</Label>
+                        <Label>Login URL</Label>
                         <Input
-                          id="credLabel"
-                          placeholder="e.g., Admin Account, Work Account"
-                          value={credentials.label}
+                          placeholder="https://login.example.com"
+                          value={newCredentials.login_url}
                           onChange={(e) =>
-                            setCredentials({ ...credentials, label: e.target.value })
+                            setNewCredentials({ ...newCredentials, login_url: e.target.value })
                           }
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="credUsername">Username / Email *</Label>
-                        <Input
-                          id="credUsername"
-                          placeholder="Enter username or email"
-                          value={credentials.username}
-                          onChange={(e) =>
-                            setCredentials({ ...credentials, username: e.target.value })
-                          }
-                        />
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label>Username / Email</Label>
+                          <Input
+                            placeholder="Username or email"
+                            value={newCredentials.username}
+                            onChange={(e) =>
+                              setNewCredentials({ ...newCredentials, username: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Password</Label>
+                          <div className="relative">
+                            <Input
+                              type={showNewPassword ? "text" : "password"}
+                              placeholder="••••••••"
+                              value={newCredentials.password}
+                              onChange={(e) =>
+                                setNewCredentials({ ...newCredentials, password: e.target.value })
+                              }
+                              className="pr-10"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="iconSm"
+                              className="absolute right-1 top-1/2 -translate-y-1/2"
+                              onClick={() => setShowNewPassword(!showNewPassword)}
+                            >
+                              {showNewPassword ? <Key className="h-4 w-4" /> : <Key className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="credPassword">Password *</Label>
-                        <Input
-                          id="credPassword"
-                          type="password"
-                          placeholder="Enter password"
-                          value={credentials.password}
+                        <Label>Notes (optional)</Label>
+                        <Textarea
+                          placeholder="Additional notes (e.g., 2FA setup instructions)"
+                          value={newCredentials.notes}
                           onChange={(e) =>
-                            setCredentials({ ...credentials, password: e.target.value })
+                            setNewCredentials({ ...newCredentials, notes: e.target.value })
                           }
+                          rows={2}
                         />
                       </div>
                     </div>
