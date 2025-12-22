@@ -109,56 +109,17 @@ export const CredentialsPage = () => {
     }));
   };
 
-  // Copy to clipboard with fallback
-  const copyToClipboard = async (text, label) => {
-    // Method 1: Try modern Clipboard API
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-      try {
-        await navigator.clipboard.writeText(text);
-        toast.success(`${label} copied to clipboard`);
-        return;
-      } catch (err) {
-        console.log("Clipboard API failed, trying fallback:", err);
-      }
-    }
-    
-    // Method 2: Fallback using textarea and execCommand
-    const textArea = document.createElement("textarea");
-    textArea.value = text;
-    
-    // Make the textarea invisible but in the viewport
-    textArea.style.position = "fixed";
-    textArea.style.top = "0";
-    textArea.style.left = "0";
-    textArea.style.width = "2em";
-    textArea.style.height = "2em";
-    textArea.style.padding = "0";
-    textArea.style.border = "none";
-    textArea.style.outline = "none";
-    textArea.style.boxShadow = "none";
-    textArea.style.background = "transparent";
-    textArea.style.opacity = "0";
-    
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-    
-    try {
-      const successful = document.execCommand('copy');
-      if (successful) {
-        toast.success(`${label} copied to clipboard`);
-      } else {
-        throw new Error("execCommand returned false");
-      }
-    } catch (err) {
-      console.log("execCommand failed:", err);
-      // Final fallback - show the text to copy manually
+  // Handle copy to clipboard with toast feedback
+  const handleCopy = async (text, label) => {
+    const success = await copyToClipboard(text);
+    if (success) {
+      toast.success(`${label} copied to clipboard`);
+    } else {
+      // Show the text in toast for manual copy
       toast.info(`${label}: ${text}`, { 
         duration: 8000,
         description: "Select and copy manually (Ctrl+C)"
       });
-    } finally {
-      document.body.removeChild(textArea);
     }
   };
 
