@@ -93,6 +93,22 @@ export const usersAPI = {
       body: JSON.stringify(toolIds),
     }),
   
+  // Credentials management (Super Admin only)
+  getAllCredentials: () => 
+    fetchAPI('/api/users/credentials/all'),
+  
+  resetPassword: (id, newPassword) =>
+    fetchAPI(`/api/users/${id}/reset-password`, {
+      method: 'PUT',
+      body: JSON.stringify({ new_password: newPassword }),
+    }),
+  
+  sendPasswordReset: (id) =>
+    fetchAPI(`/api/users/${id}/send-password-reset`, { method: 'POST' }),
+  
+  toggle2SV: (id, enabled) =>
+    fetchAPI(`/api/users/${id}/toggle-2sv?enabled=${enabled}`, { method: 'PUT' }),
+  
   // Assign users to an Admin (Super Admin only)
   assignUsersToAdmin: (adminId, userIds) =>
     fetchAPI(`/api/users/${adminId}/assign-users`, {
