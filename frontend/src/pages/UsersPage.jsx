@@ -148,6 +148,60 @@ export const UsersPage = () => {
     }
   };
 
+  const fetchTools = async () => {
+    try {
+      const data = await toolsAPI.getAll();
+      setAllTools(data);
+    } catch (error) {
+      console.error("Failed to load tools:", error);
+    }
+  };
+
+  const handleOpenToolAccess = (user) => {
+    setToolAccessUser(user);
+    setSelectedTools(user.allowed_tools || []);
+    setToolAccessDialogOpen(true);
+  };
+
+  const handleToggleTool = (toolId) => {
+    setSelectedTools(prev => {
+      if (prev.includes(toolId)) {
+        return prev.filter(id => id !== toolId);
+      } else {
+        return [...prev, toolId];
+      }
+    });
+  };
+
+  const handleSelectAllTools = () => {
+    if (selectedTools.length === allTools.length) {
+      setSelectedTools([]);
+    } else {
+      setSelectedTools(allTools.map(t => t.id));
+    }
+  };
+
+  const handleSaveToolAccess = async () => {
+    if (!toolAccessUser) return;
+    
+    setIsSaving(true);
+    try {
+      await usersAPI.updateToolAccess(toolAccessUser.id, selectedTools);
+      // Update local state
+      setUsers(users.map(u => 
+        u.id === toolAccessUser.id ? { ...u, allowed_tools: selectedTools } : u
+      ));
+      toast.success(`Tool access updated for ${toolAccessUser.name}`, {
+        description: `${selectedTools.length} tool(s) accessible`
+      });
+      setToolAccessDialogOpen(false);
+    } catch (error) {
+      toast.error(`Failed to update tool access: ${error.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const filteredUsers = users.filter(
     (user) =>
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
