@@ -458,7 +458,7 @@ export const CredentialsPage = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => copyToClipboard(generatedPassword?.password, "Password")}
+                  onClick={() => handleCopy(generatedPassword?.password, "Password")}
                 >
                   <Copy className="h-4 w-4" />
                 </Button>
