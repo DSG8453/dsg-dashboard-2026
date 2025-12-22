@@ -108,10 +108,42 @@ export const CredentialsPage = () => {
     }));
   };
 
-  // Copy to clipboard
-  const copyToClipboard = (text, label) => {
-    navigator.clipboard.writeText(text);
-    toast.success(`${label} copied to clipboard`);
+  // Copy to clipboard with fallback
+  const copyToClipboard = async (text, label) => {
+    try {
+      // Try modern Clipboard API first
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        toast.success(`${label} copied to clipboard`);
+        return;
+      }
+      
+      // Fallback for older browsers or restricted contexts
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      try {
+        document.execCommand('copy');
+        toast.success(`${label} copied to clipboard`);
+      } catch (err) {
+        // If all else fails, show a dialog with the text
+        toast.info(`Copy this ${label}: ${text}`, { duration: 5000 });
+      }
+      
+      document.body.removeChild(textArea);
+    } catch (err) {
+      // Final fallback - show toast with the text
+      toast.info(`${label}: ${text}`, { 
+        duration: 8000,
+        description: "Click to dismiss after copying manually"
+      });
+    }
   };
 
   // Reset password
