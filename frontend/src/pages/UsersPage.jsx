@@ -651,6 +651,28 @@ export const UsersPage = () => {
                 </Select>
               </div>
             </div>
+
+            {/* Send Email Checkbox */}
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sendInvitationEmail}
+                  onChange={(e) => setSendInvitationEmail(e.target.checked)}
+                  className="rounded border-primary text-primary focus:ring-primary h-4 w-4"
+                />
+                <div>
+                  <span className="font-medium flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-primary" />
+                    Send invitation email
+                  </span>
+                  <p className="text-xs text-muted-foreground">
+                    User will receive login credentials via email from info@dsgtransport.net
+                  </p>
+                </div>
+              </label>
+            </div>
+
             <Button 
               variant="gradient" 
               className="w-full mt-4" 
@@ -665,7 +687,7 @@ export const UsersPage = () => {
               ) : (
                 <>
                   <UserPlus className="mr-2 h-4 w-4" />
-                  Create User
+                  {sendInvitationEmail ? "Create & Send Email" : "Create User"}
                 </>
               )}
             </Button>
