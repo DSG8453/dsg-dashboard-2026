@@ -272,6 +272,7 @@ export const AuthProvider = ({ children }) => {
     deviceInfo,
     isDeviceApproved,
     login,
+    loginWithGoogle,
     verifyOtp,
     resendOtp,
     logout,
