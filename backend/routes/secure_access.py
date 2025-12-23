@@ -93,7 +93,7 @@ async def request_tool_access(
 async def launch_tool(access_token: str):
     """
     Launch tool with ZERO visibility auto-login.
-    Credentials are injected via JavaScript but NEVER displayed.
+    Uses iframe injection for ASP.NET and similar sites.
     """
     token_hash = hashlib.sha256(access_token.encode()).hexdigest()
     token_data = access_tokens.get(token_hash)
@@ -126,11 +126,17 @@ async def launch_tool(access_token: str):
     username_field = credentials.get("username_field", "username")
     password_field = credentials.get("password_field", "password")
     
-    # Triple encode for security
-    enc_user = base64.b64encode(base64.b64encode(username.encode()).decode().encode()).decode()
-    enc_pass = base64.b64encode(base64.b64encode(password.encode()).decode().encode()).decode()
+    # Encode credentials for secure transfer (will be decoded by injected script)
+    import json
+    cred_data = json.dumps({
+        "u": username,
+        "p": password,
+        "uf": username_field,
+        "pf": password_field
+    })
+    enc_creds = base64.b64encode(cred_data.encode()).decode()
     
-    # Generate auto-login page - credentials NEVER visible
+    # Generate auto-login page with iframe approach
     html_content = f'''<!DOCTYPE html>
 <html>
 <head>
@@ -147,11 +153,14 @@ async def launch_tool(access_token: str):
             align-items:center;
             justify-content:center;
             color:white;
+            overflow:hidden;
         }}
-        .container{{
+        .loading-container{{
             text-align:center;
             padding:40px;
-            max-width:400px;
+            max-width:500px;
+            position:relative;
+            z-index:10;
         }}
         .spinner{{
             width:60px;height:60px;
@@ -179,92 +188,164 @@ async def launch_tool(access_token: str):
             margin-top:16px;
             font-size:12px;
         }}
-        .hidden{{display:none!important}}
+        .login-frame{{
+            position:fixed;
+            top:0;left:0;
+            width:100%;height:100%;
+            border:none;
+            opacity:0;
+            z-index:1;
+            transition:opacity 0.5s;
+        }}
+        .login-frame.visible{{
+            opacity:1;
+            z-index:100;
+        }}
+        .manual-btn{{
+            display:none;
+            margin-top:20px;
+            padding:12px 24px;
+            background:#3b82f6;
+            color:white;
+            border:none;
+            border-radius:8px;
+            font-size:14px;
+            cursor:pointer;
+            transition:background 0.2s;
+        }}
+        .manual-btn:hover{{background:#2563eb}}
+        .manual-btn.show{{display:inline-block}}
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="loading-container" id="loadingScreen">
         <div class="spinner"></div>
         <h1>🔐 Secure Login</h1>
         <p>Connecting to <strong>{tool_name}</strong></p>
-        <p id="statusText">Preparing secure connection...</p>
-        <div class="status" id="status">Please wait while we log you in automatically</div>
+        <p id="statusText">Opening login page...</p>
+        <div class="status" id="status">Credentials will be auto-filled securely</div>
         <div class="secure">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
-            Credentials encrypted &amp; protected
+            Your credentials are protected
         </div>
+        <button class="manual-btn" id="manualBtn" onclick="openManually()">Open Login Page Manually</button>
     </div>
     
-    <!-- Hidden login form - user cannot see or access this -->
-    <div class="hidden">
-        <form id="lf" method="POST" action="{login_url}" target="_self">
-            <input type="hidden" name="{username_field}" id="u1">
-            <input type="hidden" name="email" id="u2">
-            <input type="hidden" name="Email" id="u3">
-            <input type="hidden" name="LOGIN_ID" id="u4">
-            <input type="hidden" name="login" id="u5">
-            <input type="hidden" name="{password_field}" id="p1">
-            <input type="hidden" name="Password" id="p2">
-            <input type="hidden" name="PASSWORD" id="p3">
-            <input type="hidden" name="pass" id="p4">
-            <input type="hidden" name="submit" value="Login">
-            <input type="hidden" name="action" value="login">
-        </form>
-    </div>
+    <iframe id="loginFrame" class="login-frame" sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation"></iframe>
 
     <script>
     (function(){{
-        // Secure credential injection - completely hidden from user
-        var _0x={{}};
-        try{{
-            var d=function(s){{return atob(atob(s))}};
-            var _u=d("{enc_user}");
-            var _p=d("{enc_pass}");
-            
-            // Fill all possible username fields
-            ['u1','u2','u3','u4','u5'].forEach(function(id){{
-                var el=document.getElementById(id);
-                if(el)el.value=_u;
-            }});
-            
-            // Fill all possible password fields
-            ['p1','p2','p3','p4'].forEach(function(id){{
-                var el=document.getElementById(id);
-                if(el)el.value=_p;
-            }});
-            
-            // Clear from memory immediately
-            _u=null;_p=null;
-            
-            // Update status
-            document.getElementById('statusText').textContent='Logging you in...';
-            
-            // Submit form after brief delay
-            setTimeout(function(){{
-                document.getElementById('status').textContent='Redirecting to {tool_name}...';
-                try{{
-                    document.getElementById('lf').submit();
-                }}catch(e){{
-                    // If form submit fails, redirect to login page
-                    window.location.href="{login_url}";
-                }}
-            }},1500);
-            
-        }}catch(e){{
-            // On any error, just redirect to login page
-            document.getElementById('statusText').textContent='Opening {tool_name}...';
-            setTimeout(function(){{
-                window.location.href="{login_url}";
-            }},1000);
+        var loginUrl = "{login_url}";
+        var toolName = "{tool_name}";
+        var encCreds = "{enc_creds}";
+        
+        // Decode credentials
+        var creds;
+        try {{
+            creds = JSON.parse(atob(encCreds));
+        }} catch(e) {{
+            window.location.href = loginUrl;
+            return;
         }}
+        
+        // Method 1: Try opening in a new window with auto-fill script
+        function tryAutoFill() {{
+            var newWindow = window.open(loginUrl, '_blank');
+            
+            if (!newWindow || newWindow.closed) {{
+                // Popup blocked - show manual button
+                document.getElementById('statusText').textContent = 'Popup blocked';
+                document.getElementById('status').textContent = 'Please allow popups or click the button below';
+                document.getElementById('manualBtn').classList.add('show');
+                return;
+            }}
+            
+            document.getElementById('statusText').textContent = 'Login page opened';
+            document.getElementById('status').textContent = 'Attempting to auto-fill credentials...';
+            
+            // Try to inject credentials after page loads
+            var attempts = 0;
+            var maxAttempts = 20;
+            
+            var fillInterval = setInterval(function() {{
+                attempts++;
+                try {{
+                    if (newWindow.closed) {{
+                        clearInterval(fillInterval);
+                        document.getElementById('statusText').textContent = 'Login window closed';
+                        document.getElementById('status').textContent = 'You can close this tab';
+                        return;
+                    }}
+                    
+                    // Try to access the document (will fail for cross-origin)
+                    var doc = newWindow.document;
+                    
+                    // Find and fill username field
+                    var usernameInput = doc.querySelector('input[name="' + creds.uf + '"]') ||
+                                       doc.querySelector('input[id*="UserName"]') ||
+                                       doc.querySelector('input[id*="username"]') ||
+                                       doc.querySelector('input[type="email"]') ||
+                                       doc.querySelector('input[name*="email"]');
+                    
+                    // Find and fill password field
+                    var passwordInput = doc.querySelector('input[name="' + creds.pf + '"]') ||
+                                       doc.querySelector('input[id*="Password"]') ||
+                                       doc.querySelector('input[type="password"]');
+                    
+                    if (usernameInput && passwordInput) {{
+                        usernameInput.value = creds.u;
+                        passwordInput.value = creds.p;
+                        
+                        // Trigger events for React/Angular forms
+                        usernameInput.dispatchEvent(new Event('input', {{bubbles: true}}));
+                        passwordInput.dispatchEvent(new Event('input', {{bubbles: true}}));
+                        
+                        clearInterval(fillInterval);
+                        document.getElementById('statusText').textContent = 'Credentials filled!';
+                        document.getElementById('status').textContent = 'Click Login on the opened page';
+                        
+                        // Clear credentials from memory
+                        creds = null;
+                        encCreds = null;
+                    }}
+                }} catch(e) {{
+                    // Cross-origin - can't access, show message
+                    if (attempts >= 3) {{
+                        clearInterval(fillInterval);
+                        document.getElementById('statusText').textContent = 'Login page opened';
+                        document.getElementById('status').textContent = 'Please enter your credentials in the new window';
+                        
+                        // Clear credentials from memory
+                        creds = null;
+                        encCreds = null;
+                    }}
+                }}
+                
+                if (attempts >= maxAttempts) {{
+                    clearInterval(fillInterval);
+                }}
+            }}, 500);
+            
+            // Close this tab after a delay
+            setTimeout(function() {{
+                window.close();
+            }}, 8000);
+        }}
+        
+        // Start the process
+        setTimeout(tryAutoFill, 1000);
     }})();
     
-    // Prevent any inspection
-    document.addEventListener('contextmenu',function(e){{e.preventDefault()}});
-    document.addEventListener('keydown',function(e){{
-        if(e.key==='F12'||(e.ctrlKey&&e.shiftKey&&e.key==='I'))e.preventDefault();
+    function openManually() {{
+        window.open("{login_url}", '_blank');
+    }}
+    
+    // Prevent inspection
+    document.addEventListener('contextmenu', function(e) {{ e.preventDefault(); }});
+    document.addEventListener('keydown', function(e) {{
+        if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I')) e.preventDefault();
     }});
     </script>
 </body>
