@@ -546,8 +546,8 @@ export const IssuesPage = () => {
                   </>
                 )}
 
-                {/* User view - waiting message */}
-                {!isAdmin && selectedIssue.status !== "resolved" && (
+                {/* User/Admin view - waiting message */}
+                {!isSuperAdmin && selectedIssue.status !== "resolved" && (
                   <div className="p-4 rounded-lg bg-muted/50 text-center">
                     <Clock className="h-8 w-8 text-primary mx-auto mb-2" />
                     <p className="font-medium">Your issue is being reviewed</p>
