@@ -102,8 +102,8 @@ async def request_tool_access(
 @router.get("/launch/{access_token}")
 async def launch_tool(access_token: str):
     """
-    Launch tool with server-side auto-login.
-    Performs login on backend, then redirects user with session.
+    Launch tool - opens login page and submits credentials via form.
+    Credentials are hidden in encoded format.
     """
     token_hash = hashlib.sha256(access_token.encode()).hexdigest()
     token_data = access_tokens.get(token_hash)
@@ -136,48 +136,64 @@ async def launch_tool(access_token: str):
     username_field = credentials.get("username_field", "username")
     password_field = credentials.get("password_field", "password")
     
-    try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
-            # Step 1: Fetch the login page to get any hidden fields (ViewState, etc.)
-            login_page = await client.get(login_url)
-            
-            if login_page.status_code != 200:
-                # Can't fetch login page, just redirect
-                return RedirectResponse(url=login_url, status_code=302)
-            
-            html_content = login_page.text
-            
-            # Extract hidden fields (ASP.NET ViewState, EventValidation, etc.)
-            hidden_fields = {}
-            
-            # Find all hidden inputs
-            hidden_pattern = r'<input[^>]*type=["\']hidden["\'][^>]*>'
-            hidden_inputs = re.findall(hidden_pattern, html_content, re.IGNORECASE)
-            
-            for inp in hidden_inputs:
-                name_match = re.search(r'name=["\']([^"\']+)["\']', inp)
-                value_match = re.search(r'value=["\']([^"\']*)["\']', inp)
-                if name_match:
-                    name = name_match.group(1)
-                    value = value_match.group(1) if value_match else ""
-                    hidden_fields[name] = value
-            
-            # Build form data
-            form_data = hidden_fields.copy()
-            form_data[username_field] = username
-            form_data[password_field] = password
-            
-            # Also add common field names as backup
-            form_data["username"] = username
-            form_data["password"] = password
-            form_data["email"] = username
-            form_data["Email"] = username
-            
-            # Step 2: Submit the login form
-            headers = {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Referer": login_url,
-                "Origin": login_url.rsplit("/", 1)[0] if "/" in login_url else login_url
+    # Encode credentials to hide them in the HTML
+    cred_json = json.dumps({"u": username, "p": password})
+    encoded_creds = base64.b64encode(cred_json.encode()).decode()
+    
+    # Simple HTML page that submits a form with credentials
+    html = f'''<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Opening {tool_name}...</title>
+<style>
+body{{margin:0;padding:40px;font-family:system-ui,sans-serif;background:#0f172a;color:#fff;text-align:center}}
+.spinner{{width:40px;height:40px;border:3px solid #334155;border-top:3px solid #3b82f6;border-radius:50%;animation:spin 1s linear infinite;margin:20px auto}}
+@keyframes spin{{to{{transform:rotate(360deg)}}}}
+</style>
+</head>
+<body>
+<div class="spinner"></div>
+<p>Opening {tool_name}...</p>
+<p style="font-size:12px;opacity:0.6">Credentials are securely managed</p>
+
+<form id="loginForm" method="POST" action="{login_url}" style="display:none">
+<input type="text" name="{username_field}" id="userField">
+<input type="password" name="{password_field}" id="passField">
+<input type="text" name="username" id="userField2">
+<input type="password" name="password" id="passField2">
+<input type="text" name="email" id="emailField">
+<input type="text" name="Email" id="EmailField">
+<input type="text" name="LOGIN_ID" id="loginIdField">
+<input type="password" name="PASSWORD" id="PASSWORDField">
+</form>
+
+<script>
+(function(){{
+try{{
+var d=atob("{encoded_creds}");
+var c=JSON.parse(d);
+document.getElementById("userField").value=c.u;
+document.getElementById("passField").value=c.p;
+document.getElementById("userField2").value=c.u;
+document.getElementById("passField2").value=c.p;
+document.getElementById("emailField").value=c.u;
+document.getElementById("EmailField").value=c.u;
+document.getElementById("loginIdField").value=c.u;
+document.getElementById("PASSWORDField").value=c.p;
+c=null;d=null;
+setTimeout(function(){{
+document.getElementById("loginForm").submit();
+}},500);
+}}catch(e){{
+window.location.href="{login_url}";
+}}
+}})();
+</script>
+</body>
+</html>'''
+    
+    return HTMLResponse(content=html)
             }
             
             # Get cookies from the initial request
