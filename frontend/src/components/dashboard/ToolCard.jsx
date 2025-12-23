@@ -746,6 +746,122 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Extension Installation Dialog */}
+      <Dialog open={extensionDialogOpen} onOpenChange={setExtensionDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              Secure Login Extension Required
+            </DialogTitle>
+            <DialogDescription>
+              Install the DSG Transport browser extension for secure, automatic login
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Warning */}
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-warning/10 border border-warning/20">
+              <AlertTriangle className="h-5 w-5 text-warning mt-0.5" />
+              <div>
+                <p className="font-medium text-warning">Why is this needed?</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  For your security, credentials are <strong>never visible</strong>. 
+                  The extension auto-fills your login without showing passwords.
+                </p>
+              </div>
+            </div>
+
+            {/* Installation Steps */}
+            <div className="space-y-3">
+              <h4 className="font-semibold flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                Installation Steps
+              </h4>
+              
+              <ol className="space-y-3 text-sm">
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">1</span>
+                  <div>
+                    <p className="font-medium">Download the extension folder</p>
+                    <p className="text-muted-foreground">Ask your IT administrator for the <code className="px-1 py-0.5 bg-muted rounded">browser-extension</code> folder</p>
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">2</span>
+                  <div>
+                    <p className="font-medium">Open Chrome Extensions</p>
+                    <p className="text-muted-foreground">Go to <code className="px-1 py-0.5 bg-muted rounded">chrome://extensions/</code></p>
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">3</span>
+                  <div>
+                    <p className="font-medium">Enable Developer mode</p>
+                    <p className="text-muted-foreground">Toggle the switch in the top-right corner</p>
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">4</span>
+                  <div>
+                    <p className="font-medium">Click "Load unpacked"</p>
+                    <p className="text-muted-foreground">Select the <code className="px-1 py-0.5 bg-muted rounded">browser-extension</code> folder</p>
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">5</span>
+                  <div>
+                    <p className="font-medium">Copy the Extension ID</p>
+                    <p className="text-muted-foreground">It looks like: <code className="px-1 py-0.5 bg-muted rounded text-xs">abcdefghijklmnopqrstuvwxyz123456</code></p>
+                  </div>
+                </li>
+              </ol>
+            </div>
+
+            {/* Extension ID Input */}
+            <div className="space-y-2 pt-2 border-t">
+              <Label htmlFor="extensionId">Paste your Extension ID here:</Label>
+              <div className="flex gap-2">
+                <Input 
+                  id="extensionId"
+                  placeholder="abcdefghijklmnopqrstuvwxyz123456"
+                  defaultValue={localStorage.getItem('dsg_extension_id') || ''}
+                />
+                <Button 
+                  onClick={() => {
+                    const input = document.getElementById('extensionId');
+                    if (input.value.trim()) {
+                      handleSaveExtensionId(input.value);
+                    } else {
+                      toast.error("Please enter the Extension ID");
+                    }
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                You only need to do this once. The ID will be saved in your browser.
+              </p>
+            </div>
+
+            {/* Already have extension */}
+            <div className="pt-2 border-t">
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => {
+                  setExtensionDialogOpen(false);
+                  handleDirectAccess();
+                }}
+              >
+                Skip for now (manual login)
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
