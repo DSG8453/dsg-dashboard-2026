@@ -137,8 +137,15 @@ async def get_issue(issue_id: str, current_user: dict = Depends(get_current_user
 
 @router.put("/{issue_id}", response_model=dict)
 async def update_issue(issue_id: str, issue_data: IssueUpdate, current_user: dict = Depends(require_admin)):
-    """Update issue (admin only)"""
+    """Update issue (Super Admin only)"""
     db = await get_db()
+    
+    # Only Super Admin can update issues
+    if current_user["role"] != "Super Administrator":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Super Administrator can manage issues"
+        )
     
     issue = await db.issues.find_one({"_id": ObjectId(issue_id)})
     if not issue:
