@@ -166,6 +166,9 @@ async def update_tool(tool_id: str, tool_data: ToolCreateWithCredentials, curren
         {"$set": update_data}
     )
     
+    # Notify all connected users about the tool update
+    await notify_tool_updated(tool_data.name, tool_id)
+    
     return {
         "id": tool_id,
         "name": tool_data.name,
