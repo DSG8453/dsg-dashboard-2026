@@ -94,8 +94,7 @@ async def request_tool_access(
 async def launch_tool(access_token: str):
     """
     Launch tool with secure auto-login.
-    Uses hidden form POST submission for auto-login.
-    Credentials are encoded and injected via JavaScript to prevent easy viewing.
+    Opens login page and auto-fills credentials using multiple techniques.
     """
     token_hash = hashlib.sha256(access_token.encode()).hexdigest()
     token_data = access_tokens.get(token_hash)
@@ -128,15 +127,47 @@ async def launch_tool(access_token: str):
     username_field = credentials.get("username_field", "username")
     password_field = credentials.get("password_field", "password")
     
-    # Encode credentials (double base64 for obfuscation)
-    enc_user = base64.b64encode(base64.b64encode(username.encode()).decode().encode()).decode()
-    enc_pass = base64.b64encode(base64.b64encode(password.encode()).decode().encode()).decode()
+    # Create credential data for injection
+    cred_data = {
+        "u": username,
+        "p": password,
+        "uf": username_field,
+        "pf": password_field,
+        "url": login_url
+    }
+    enc_creds = base64.b64encode(json.dumps(cred_data).encode()).decode()
     
-    # Generate secure auto-login page
+    # Common username field selectors
+    username_selectors = f'''
+        'input[name="{username_field}"]',
+        'input[id*="UserName" i]',
+        'input[id*="username" i]',
+        'input[id*="email" i]',
+        'input[id*="login" i]',
+        'input[name*="email" i]',
+        'input[name*="user" i]',
+        'input[name*="login" i]',
+        'input[type="email"]',
+        'input[placeholder*="email" i]',
+        'input[placeholder*="user" i]'
+    '''
+    
+    # Common password field selectors  
+    password_selectors = f'''
+        'input[name="{password_field}"]',
+        'input[id*="Password" i]',
+        'input[id*="password" i]',
+        'input[id*="pass" i]',
+        'input[type="password"]',
+        'input[name*="pass" i]',
+        'input[name*="pwd" i]'
+    '''
+    
+    # Generate the auto-login page
     html_content = f'''<!DOCTYPE html>
 <html>
 <head>
-    <title>🔐 Secure Access - {tool_name}</title>
+    <title>Opening {tool_name}...</title>
     <meta charset="UTF-8">
     <meta name="robots" content="noindex,nofollow">
     <style>
@@ -150,11 +181,7 @@ async def launch_tool(access_token: str):
             justify-content:center;
             color:white;
         }}
-        .container{{
-            text-align:center;
-            padding:40px;
-            max-width:450px;
-        }}
+        .container{{text-align:center;padding:40px;max-width:500px}}
         .spinner{{
             width:50px;height:50px;
             border:4px solid rgba(255,255,255,0.2);
@@ -169,35 +196,13 @@ async def launch_tool(access_token: str):
         .status{{
             background:rgba(59,130,246,0.2);
             border:1px solid rgba(59,130,246,0.3);
-            padding:16px 20px;
-            border-radius:12px;
-            margin-top:20px;
-            font-size:13px;
+            padding:16px 20px;border-radius:12px;
+            margin-top:20px;font-size:13px;
         }}
         .secure{{
-            display:inline-flex;
-            align-items:center;
-            gap:6px;
-            color:#22c55e;
-            margin-top:16px;
-            font-size:12px;
+            display:inline-flex;align-items:center;gap:6px;
+            color:#22c55e;margin-top:16px;font-size:12px;
         }}
-        .btn{{
-            display:inline-block;
-            margin-top:20px;
-            padding:14px 28px;
-            background:linear-gradient(135deg,#3b82f6,#2563eb);
-            color:white;
-            border:none;
-            border-radius:10px;
-            font-size:15px;
-            font-weight:600;
-            cursor:pointer;
-            text-decoration:none;
-            transition:all 0.2s;
-            box-shadow:0 4px 15px rgba(59,130,246,0.3);
-        }}
-        .btn:hover{{transform:translateY(-2px);box-shadow:0 6px 20px rgba(59,130,246,0.4)}}
         .hidden{{position:absolute;left:-9999px;opacity:0;pointer-events:none}}
     </style>
 </head>
@@ -206,10 +211,10 @@ async def launch_tool(access_token: str):
         <div class="spinner" id="spinner"></div>
         <h1>🔐 Secure Access</h1>
         <p>Opening <strong>{tool_name}</strong></p>
-        <p id="statusText">Preparing secure connection...</p>
+        <p id="statusText">Connecting securely...</p>
         <div class="status" id="status">
-            ✅ Your login credentials are protected<br>
-            <small style="opacity:0.7">Credentials managed by Super Admin</small>
+            ✅ Credentials protected<br>
+            <small style="opacity:0.7">Auto-filling login form...</small>
         </div>
         <div class="secure">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -217,72 +222,194 @@ async def launch_tool(access_token: str):
             </svg>
             End-to-end encrypted
         </div>
-        <a class="btn" id="openBtn" style="display:none" href="{login_url}" target="_blank">Open {tool_name}</a>
     </div>
     
-    <!-- Hidden auto-submit form - credentials injected via JS -->
+    <!-- Multiple hidden forms for different field name patterns -->
     <div class="hidden">
-        <form id="autoForm" method="POST" action="{login_url}" target="_blank">
-            <input type="text" name="{username_field}" id="uf1">
-            <input type="password" name="{password_field}" id="pf1">
+        <form id="f1" method="POST" action="{login_url}">
+            <input name="{username_field}" id="u1">
+            <input type="password" name="{password_field}" id="p1">
+        </form>
+        <form id="f2" method="POST" action="{login_url}">
+            <input name="username" id="u2">
+            <input type="password" name="password" id="p2">
+        </form>
+        <form id="f3" method="POST" action="{login_url}">
+            <input name="email" id="u3">
+            <input type="password" name="password" id="p3">
+        </form>
+        <form id="f4" method="POST" action="{login_url}">
+            <input name="LOGIN_ID" id="u4">
+            <input type="password" name="PASSWORD" id="p4">
         </form>
     </div>
 
     <script>
     (function(){{
-        // Decode and inject credentials
-        var d=function(s){{return atob(atob(s))}};
-        var _u,_p;
-        try{{
-            _u=d("{enc_user}");
-            _p=d("{enc_pass}");
-        }}catch(e){{
-            window.location.href="{login_url}";
-            return;
+        var D="{enc_creds}";
+        var C;
+        try{{C=JSON.parse(atob(D))}}catch(e){{window.location.href="{login_url}";return}}
+        
+        // Fill all form variants
+        ['u1','u2','u3','u4'].forEach(function(id){{
+            var el=document.getElementById(id);
+            if(el)el.value=C.u;
+        }});
+        ['p1','p2','p3','p4'].forEach(function(id){{
+            var el=document.getElementById(id);
+            if(el)el.value=C.p;
+        }});
+        
+        var loginUrl=C.url;
+        var username=C.u;
+        var password=C.p;
+        var uf=C.uf;
+        var pf=C.pf;
+        
+        // Clear credentials from memory
+        C=null;D=null;
+        
+        function updateStatus(msg){{
+            document.getElementById('statusText').textContent=msg;
         }}
         
-        // Inject into form
-        document.getElementById('uf1').value=_u;
-        document.getElementById('pf1').value=_p;
-        
-        // Clear from memory
-        _u=null;_p=null;
-        
-        var submitted=false;
+        function tryFillAndSubmit(win){{
+            try{{
+                var doc=win.document;
+                
+                // Try to find username field with multiple selectors
+                var userSelectors=[
+                    'input[name="'+uf+'"]',
+                    'input[id*="UserName"]',
+                    'input[id*="username"]',
+                    'input[id*="txtUserName"]',
+                    'input[name*="email"]',
+                    'input[name*="user"]',
+                    'input[name="username"]',
+                    'input[name="email"]',
+                    'input[name="LOGIN_ID"]',
+                    'input[type="email"]',
+                    'input[placeholder*="email" i]',
+                    'input[placeholder*="user" i]'
+                ];
+                
+                var passSelectors=[
+                    'input[name="'+pf+'"]',
+                    'input[type="password"]',
+                    'input[id*="Password"]',
+                    'input[id*="txtPassword"]',
+                    'input[name="password"]',
+                    'input[name="PASSWORD"]',
+                    'input[name="pass"]'
+                ];
+                
+                var userInput=null,passInput=null;
+                
+                for(var i=0;i<userSelectors.length;i++){{
+                    userInput=doc.querySelector(userSelectors[i]);
+                    if(userInput)break;
+                }}
+                
+                for(var i=0;i<passSelectors.length;i++){{
+                    passInput=doc.querySelector(passSelectors[i]);
+                    if(passInput)break;
+                }}
+                
+                if(userInput&&passInput){{
+                    // Set values
+                    userInput.value=username;
+                    passInput.value=password;
+                    
+                    // Trigger input events for React/Angular/Vue forms
+                    var inputEvent=new Event('input',{{bubbles:true}});
+                    var changeEvent=new Event('change',{{bubbles:true}});
+                    userInput.dispatchEvent(inputEvent);
+                    userInput.dispatchEvent(changeEvent);
+                    passInput.dispatchEvent(inputEvent);
+                    passInput.dispatchEvent(changeEvent);
+                    
+                    // Also set via native setter for React
+                    var nativeInputSetter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;
+                    if(nativeInputSetter){{
+                        nativeInputSetter.call(userInput,username);
+                        nativeInputSetter.call(passInput,password);
+                        userInput.dispatchEvent(inputEvent);
+                        passInput.dispatchEvent(inputEvent);
+                    }}
+                    
+                    updateStatus('Credentials filled! Click Login.');
+                    
+                    // Clear from memory
+                    username=null;password=null;
+                    
+                    return true;
+                }}
+            }}catch(e){{
+                // Cross-origin - expected
+            }}
+            return false;
+        }}
         
         function launch(){{
-            if(submitted)return;
-            submitted=true;
+            updateStatus('Opening '+'{tool_name}'+'...');
             
-            document.getElementById('statusText').textContent='Launching {tool_name}...';
+            // Open login page in new window
+            var win=window.open(loginUrl,'_blank');
             
-            try{{
-                document.getElementById('autoForm').submit();
-                
-                setTimeout(function(){{
-                    document.getElementById('spinner').style.display='none';
-                    document.getElementById('statusText').textContent='{tool_name} opened in new tab';
-                    document.getElementById('status').innerHTML='✅ Login attempted<br><small>If not logged in, credentials may need verification</small>';
-                    document.getElementById('openBtn').style.display='inline-block';
-                }},1500);
-                
-            }}catch(e){{
-                window.open('{login_url}','_blank');
-                document.getElementById('spinner').style.display='none';
-                document.getElementById('statusText').textContent='{tool_name} opened';
-                document.getElementById('openBtn').style.display='inline-block';
+            if(!win||win.closed){{
+                // Popup blocked - try form submission instead
+                updateStatus('Submitting credentials...');
+                document.getElementById('f1').submit();
+                return;
             }}
+            
+            // Try to fill credentials multiple times as page loads
+            var attempts=0;
+            var maxAttempts=30;
+            var filled=false;
+            
+            var interval=setInterval(function(){{
+                attempts++;
+                
+                if(win.closed){{
+                    clearInterval(interval);
+                    updateStatus('Login window closed');
+                    document.getElementById('spinner').style.display='none';
+                    return;
+                }}
+                
+                if(!filled){{
+                    filled=tryFillAndSubmit(win);
+                    if(filled){{
+                        updateStatus('Credentials auto-filled!');
+                        document.getElementById('status').innerHTML='✅ Login form filled<br><small>Click the Login button in the new window</small>';
+                    }}
+                }}
+                
+                if(attempts>=maxAttempts){{
+                    clearInterval(interval);
+                    if(!filled){{
+                        // Fallback: submit form
+                        updateStatus('Opening login page...');
+                        document.getElementById('f1').submit();
+                    }}
+                    document.getElementById('spinner').style.display='none';
+                }}
+            }},300);
+            
+            // Auto-close this page after delay
+            setTimeout(function(){{
+                if(filled){{
+                    window.close();
+                }}
+            }},5000);
         }}
         
-        setTimeout(launch,800);
+        // Start after brief delay
+        setTimeout(launch,500);
         
-        // Security measures
+        // Security
         document.addEventListener('contextmenu',function(e){{e.preventDefault()}});
-        document.addEventListener('keydown',function(e){{
-            if(e.key==='F12'||(e.ctrlKey&&e.shiftKey&&(e.key==='I'||e.key==='J'||e.key==='C'))){{
-                e.preventDefault();
-            }}
-        }});
     }})();
     </script>
 </body>
