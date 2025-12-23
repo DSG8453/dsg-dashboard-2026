@@ -110,12 +110,45 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
     setIsAccessingTool(true);
     
     try {
-      // Request secure access token from backend
+      // Request secure access data from backend
       const response = await toolsAPI.requestSecureAccess(tool.id);
       
       if (response.access_url) {
         // Get the backend URL
         const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
+        
+        // Try to use browser extension for auto-fill (Bitwarden-style)
+        if (response.has_auto_login && response.extension_data) {
+          try {
+            // Send credentials to browser extension
+            if (window.chrome && window.chrome.runtime) {
+              window.chrome.runtime.sendMessage(
+                undefined, // Extension will handle
+                {
+                  action: 'autoLogin',
+                  loginUrl: response.extension_data.login_url,
+                  username: response.extension_data.username,
+                  password: response.extension_data.password,
+                  usernameField: response.extension_data.username_field,
+                  passwordField: response.extension_data.password_field
+                },
+                (resp) => {
+                  if (resp && resp.success) {
+                    toast.success(`Opening ${tool.name}`, {
+                      description: "Credentials will auto-fill",
+                      icon: <Shield className="h-4 w-4" />,
+                    });
+                  }
+                }
+              );
+              return;
+            }
+          } catch (extError) {
+            console.log("Extension not available, using fallback");
+          }
+        }
+        
+        // Fallback: Open secure access URL
         const secureUrl = `${backendUrl}${response.access_url}`;
         
         toast.success(`Launching ${tool.name}`, {
