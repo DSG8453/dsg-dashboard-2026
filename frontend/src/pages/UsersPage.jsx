@@ -320,9 +320,13 @@ export const UsersPage = () => {
     }
   };
 
-  // Get users that can be assigned to admins (only Users, not Admins or Super Admins)
+  // Get users that can be assigned to admins
+  // Super Admin can assign ANY user (except Super Admins and the target Admin themselves)
   const getAssignableUsers = () => {
-    return users.filter(u => u.role === "User");
+    return users.filter(u => 
+      u.role !== "Super Administrator" && // Cannot assign Super Admins
+      u.id !== assignUsersAdmin?.id // Cannot assign the Admin to themselves
+    );
   };
 
   const filteredUsers = users.filter(
