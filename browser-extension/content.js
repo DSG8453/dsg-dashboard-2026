@@ -153,6 +153,9 @@
       const passwordInput = findPasswordField(creds.passwordField);
       
       if (usernameInput && passwordInput) {
+        // Apply password save prevention on retry as well
+        disablePasswordSavePrompt(usernameInput, passwordInput);
+        
         fillField(usernameInput, creds.username);
         setTimeout(() => {
           fillField(passwordInput, creds.password);
