@@ -94,7 +94,7 @@ async def request_tool_access(
 async def launch_tool(access_token: str):
     """
     Launch tool with secure auto-login.
-    Opens login page and auto-fills credentials using multiple techniques.
+    Credentials are completely hidden - just auto-submits form.
     """
     token_hash = hashlib.sha256(access_token.encode()).hexdigest()
     token_data = access_tokens.get(token_hash)
@@ -118,7 +118,7 @@ async def launch_tool(access_token: str):
     credentials = token_data.get("credentials", {})
     tool_name = token_data["tool_name"]
     
-    # No credentials - just redirect
+    # No credentials - just redirect to tool URL
     if not credentials or not credentials.get("username"):
         return RedirectResponse(url=login_url, status_code=302)
     
@@ -127,47 +127,20 @@ async def launch_tool(access_token: str):
     username_field = credentials.get("username_field", "username")
     password_field = credentials.get("password_field", "password")
     
-    # Create credential data for injection
+    # Encode credentials for secure injection
     cred_data = {
         "u": username,
         "p": password,
         "uf": username_field,
-        "pf": password_field,
-        "url": login_url
+        "pf": password_field
     }
     enc_creds = base64.b64encode(json.dumps(cred_data).encode()).decode()
     
-    # Common username field selectors
-    username_selectors = f'''
-        'input[name="{username_field}"]',
-        'input[id*="UserName" i]',
-        'input[id*="username" i]',
-        'input[id*="email" i]',
-        'input[id*="login" i]',
-        'input[name*="email" i]',
-        'input[name*="user" i]',
-        'input[name*="login" i]',
-        'input[type="email"]',
-        'input[placeholder*="email" i]',
-        'input[placeholder*="user" i]'
-    '''
-    
-    # Common password field selectors  
-    password_selectors = f'''
-        'input[name="{password_field}"]',
-        'input[id*="Password" i]',
-        'input[id*="password" i]',
-        'input[id*="pass" i]',
-        'input[type="password"]',
-        'input[name*="pass" i]',
-        'input[name*="pwd" i]'
-    '''
-    
-    # Generate the auto-login page
+    # Generate minimal auto-login page - credentials NEVER visible
     html_content = f'''<!DOCTYPE html>
 <html>
 <head>
-    <title>Opening {tool_name}...</title>
+    <title>Connecting...</title>
     <meta charset="UTF-8">
     <meta name="robots" content="noindex,nofollow">
     <style>
@@ -175,242 +148,67 @@ async def launch_tool(access_token: str):
         body{{
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
             min-height:100vh;
-            background:linear-gradient(135deg,#1e3a5f 0%,#0f172a 100%);
+            background:#0f172a;
             display:flex;
             align-items:center;
             justify-content:center;
             color:white;
         }}
-        .container{{text-align:center;padding:40px;max-width:500px}}
-        .spinner{{
-            width:50px;height:50px;
-            border:4px solid rgba(255,255,255,0.2);
+        .c{{text-align:center;padding:40px}}
+        .s{{
+            width:40px;height:40px;
+            border:3px solid rgba(255,255,255,0.2);
             border-top-color:#3b82f6;
             border-radius:50%;
             animation:spin 1s linear infinite;
-            margin:0 auto 24px;
+            margin:0 auto 16px;
         }}
         @keyframes spin{{to{{transform:rotate(360deg)}}}}
-        h1{{font-size:22px;margin-bottom:12px}}
-        p{{color:rgba(255,255,255,0.8);margin-bottom:8px;font-size:14px}}
-        .status{{
-            background:rgba(59,130,246,0.2);
-            border:1px solid rgba(59,130,246,0.3);
-            padding:16px 20px;border-radius:12px;
-            margin-top:20px;font-size:13px;
-        }}
-        .secure{{
-            display:inline-flex;align-items:center;gap:6px;
-            color:#22c55e;margin-top:16px;font-size:12px;
-        }}
-        .hidden{{position:absolute;left:-9999px;opacity:0;pointer-events:none}}
+        p{{font-size:14px;opacity:0.8}}
+        .h{{position:absolute;left:-9999px;opacity:0}}
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="spinner" id="spinner"></div>
-        <h1>🔐 Secure Access</h1>
-        <p>Opening <strong>{tool_name}</strong></p>
-        <p id="statusText">Connecting securely...</p>
-        <div class="status" id="status">
-            ✅ Credentials protected<br>
-            <small style="opacity:0.7">Auto-filling login form...</small>
-        </div>
-        <div class="secure">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            </svg>
-            End-to-end encrypted
-        </div>
+    <div class="c">
+        <div class="s"></div>
+        <p>Connecting to {tool_name}...</p>
     </div>
     
-    <!-- Multiple hidden forms for different field name patterns -->
-    <div class="hidden">
-        <form id="f1" method="POST" action="{login_url}">
-            <input name="{username_field}" id="u1">
-            <input type="password" name="{password_field}" id="p1">
-        </form>
-        <form id="f2" method="POST" action="{login_url}">
+    <div class="h">
+        <form id="f" method="POST" action="{login_url}">
+            <input name="{username_field}" id="u">
+            <input type="password" name="{password_field}" id="p">
             <input name="username" id="u2">
             <input type="password" name="password" id="p2">
-        </form>
-        <form id="f3" method="POST" action="{login_url}">
             <input name="email" id="u3">
-            <input type="password" name="password" id="p3">
-        </form>
-        <form id="f4" method="POST" action="{login_url}">
             <input name="LOGIN_ID" id="u4">
             <input type="password" name="PASSWORD" id="p4">
         </form>
     </div>
-
     <script>
     (function(){{
         var D="{enc_creds}";
-        var C;
-        try{{C=JSON.parse(atob(D))}}catch(e){{window.location.href="{login_url}";return}}
-        
-        // Fill all form variants
-        ['u1','u2','u3','u4'].forEach(function(id){{
-            var el=document.getElementById(id);
-            if(el)el.value=C.u;
-        }});
-        ['p1','p2','p3','p4'].forEach(function(id){{
-            var el=document.getElementById(id);
-            if(el)el.value=C.p;
-        }});
-        
-        var loginUrl=C.url;
-        var username=C.u;
-        var password=C.p;
-        var uf=C.uf;
-        var pf=C.pf;
-        
-        // Clear credentials from memory
-        C=null;D=null;
-        
-        function updateStatus(msg){{
-            document.getElementById('statusText').textContent=msg;
+        try{{
+            var C=JSON.parse(atob(D));
+            // Fill all form fields
+            document.getElementById('u').value=C.u;
+            document.getElementById('p').value=C.p;
+            document.getElementById('u2').value=C.u;
+            document.getElementById('p2').value=C.p;
+            document.getElementById('u3').value=C.u;
+            document.getElementById('u4').value=C.u;
+            document.getElementById('p4').value=C.p;
+            // Clear from memory
+            C=null;D=null;
+            // Submit form immediately
+            setTimeout(function(){{document.getElementById('f').submit()}},300);
+        }}catch(e){{
+            window.location.href="{login_url}";
         }}
-        
-        function tryFillAndSubmit(win){{
-            try{{
-                var doc=win.document;
-                
-                // Try to find username field with multiple selectors
-                var userSelectors=[
-                    'input[name="'+uf+'"]',
-                    'input[id*="UserName"]',
-                    'input[id*="username"]',
-                    'input[id*="txtUserName"]',
-                    'input[name*="email"]',
-                    'input[name*="user"]',
-                    'input[name="username"]',
-                    'input[name="email"]',
-                    'input[name="LOGIN_ID"]',
-                    'input[type="email"]',
-                    'input[placeholder*="email" i]',
-                    'input[placeholder*="user" i]'
-                ];
-                
-                var passSelectors=[
-                    'input[name="'+pf+'"]',
-                    'input[type="password"]',
-                    'input[id*="Password"]',
-                    'input[id*="txtPassword"]',
-                    'input[name="password"]',
-                    'input[name="PASSWORD"]',
-                    'input[name="pass"]'
-                ];
-                
-                var userInput=null,passInput=null;
-                
-                for(var i=0;i<userSelectors.length;i++){{
-                    userInput=doc.querySelector(userSelectors[i]);
-                    if(userInput)break;
-                }}
-                
-                for(var i=0;i<passSelectors.length;i++){{
-                    passInput=doc.querySelector(passSelectors[i]);
-                    if(passInput)break;
-                }}
-                
-                if(userInput&&passInput){{
-                    // Set values
-                    userInput.value=username;
-                    passInput.value=password;
-                    
-                    // Trigger input events for React/Angular/Vue forms
-                    var inputEvent=new Event('input',{{bubbles:true}});
-                    var changeEvent=new Event('change',{{bubbles:true}});
-                    userInput.dispatchEvent(inputEvent);
-                    userInput.dispatchEvent(changeEvent);
-                    passInput.dispatchEvent(inputEvent);
-                    passInput.dispatchEvent(changeEvent);
-                    
-                    // Also set via native setter for React
-                    var nativeInputSetter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;
-                    if(nativeInputSetter){{
-                        nativeInputSetter.call(userInput,username);
-                        nativeInputSetter.call(passInput,password);
-                        userInput.dispatchEvent(inputEvent);
-                        passInput.dispatchEvent(inputEvent);
-                    }}
-                    
-                    updateStatus('Credentials filled! Click Login.');
-                    
-                    // Clear from memory
-                    username=null;password=null;
-                    
-                    return true;
-                }}
-            }}catch(e){{
-                // Cross-origin - expected
-            }}
-            return false;
-        }}
-        
-        function launch(){{
-            updateStatus('Opening '+'{tool_name}'+'...');
-            
-            // Open login page in new window
-            var win=window.open(loginUrl,'_blank');
-            
-            if(!win||win.closed){{
-                // Popup blocked - try form submission instead
-                updateStatus('Submitting credentials...');
-                document.getElementById('f1').submit();
-                return;
-            }}
-            
-            // Try to fill credentials multiple times as page loads
-            var attempts=0;
-            var maxAttempts=30;
-            var filled=false;
-            
-            var interval=setInterval(function(){{
-                attempts++;
-                
-                if(win.closed){{
-                    clearInterval(interval);
-                    updateStatus('Login window closed');
-                    document.getElementById('spinner').style.display='none';
-                    return;
-                }}
-                
-                if(!filled){{
-                    filled=tryFillAndSubmit(win);
-                    if(filled){{
-                        updateStatus('Credentials auto-filled!');
-                        document.getElementById('status').innerHTML='✅ Login form filled<br><small>Click the Login button in the new window</small>';
-                    }}
-                }}
-                
-                if(attempts>=maxAttempts){{
-                    clearInterval(interval);
-                    if(!filled){{
-                        // Fallback: submit form
-                        updateStatus('Opening login page...');
-                        document.getElementById('f1').submit();
-                    }}
-                    document.getElementById('spinner').style.display='none';
-                }}
-            }},300);
-            
-            // Auto-close this page after delay
-            setTimeout(function(){{
-                if(filled){{
-                    window.close();
-                }}
-            }},5000);
-        }}
-        
-        // Start after brief delay
-        setTimeout(launch,500);
-        
-        // Security
-        document.addEventListener('contextmenu',function(e){{e.preventDefault()}});
     }})();
+    // Block inspection
+    document.addEventListener('contextmenu',function(e){{e.preventDefault()}});
+    document.onkeydown=function(e){{if(e.keyCode==123||((e.ctrlKey||e.metaKey)&&e.shiftKey&&(e.keyCode==73||e.keyCode==74)))return false}};
     </script>
 </body>
 </html>'''
