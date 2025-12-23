@@ -82,6 +82,7 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAccessingTool, setIsAccessingTool] = useState(false);
   
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -102,22 +103,46 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
   const isSuperAdmin = user?.role === "Super Administrator";
   const hasCredentials = tool.has_credentials || (tool.credentials && (tool.credentials.username || tool.credentials.password));
 
-  // Handle tool access - open the tool URL directly (or login URL if available)
-  const handleAccess = () => {
-    // Prefer login URL if credentials are configured, otherwise use main URL
-    const accessUrl = tool.credentials?.login_url || tool.url;
+  // Handle secure tool access - credentials handled by backend
+  const handleAccess = async () => {
+    setIsAccessingTool(true);
     
-    if (accessUrl && accessUrl !== "#" && accessUrl !== "") {
-      window.open(accessUrl, "_blank", "noopener,noreferrer");
+    try {
+      // Request secure access token from backend
+      const response = await toolsAPI.requestSecureAccess(tool.id);
       
-      // Log access for activity tracking
-      toast.success(`Opening ${tool.name}`, {
-        description: "Tool opened in new tab"
-      });
-    } else {
-      toast.info("Tool URL not configured", {
-        description: "Please contact Super Admin to configure this tool's URL"
-      });
+      if (response.access_url) {
+        // Get the backend URL
+        const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
+        const secureUrl = `${backendUrl}${response.access_url}`;
+        
+        toast.success(`Launching ${tool.name}`, {
+          description: response.has_auto_login 
+            ? "Secure login in progress..." 
+            : "Opening tool in new tab",
+          icon: <Shield className="h-4 w-4" />,
+        });
+        
+        // Open secure access URL in new tab
+        window.open(secureUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (error) {
+      console.error("Failed to access tool:", error);
+      
+      // Fallback to direct URL if secure access fails
+      const fallbackUrl = tool.credentials?.login_url || tool.url;
+      if (fallbackUrl && fallbackUrl !== "#") {
+        toast.warning("Opening tool directly", {
+          description: "Secure access unavailable, opening login page",
+        });
+        window.open(fallbackUrl, "_blank", "noopener,noreferrer");
+      } else {
+        toast.error("Failed to access tool", {
+          description: error.message || "Please try again or contact admin",
+        });
+      }
+    } finally {
+      setIsAccessingTool(false);
     }
   };
 
