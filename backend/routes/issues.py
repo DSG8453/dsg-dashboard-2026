@@ -10,16 +10,22 @@ router = APIRouter()
 
 @router.get("", response_model=List[dict])
 async def get_issues(current_user: dict = Depends(get_current_user)):
-    """Get issues - admins see all, users see only their own"""
+    """Get issues based on role:
+    - Super Admin: sees ALL issues with FULL details (resolution, admin notes, AI analysis)
+    - Admin/User: sees ONLY their own issues with LIMITED info (status only, no resolution details)
+    """
     db = await get_db()
     
+    is_super_admin = current_user["role"] == "Super Administrator"
+    
+    # Super Admin sees all, others see only their own
     query = {}
-    if current_user["role"] != "Administrator":
+    if not is_super_admin:
         query["user_id"] = current_user["id"]
     
     issues = []
     async for issue in db.issues.find(query).sort("created_at", -1):
-        issues.append({
+        issue_data = {
             "id": str(issue["_id"]),
             "user_id": issue["user_id"],
             "user_name": issue.get("user_name", ""),
@@ -30,10 +36,28 @@ async def get_issues(current_user: dict = Depends(get_current_user)):
             "priority": issue["priority"],
             "status": issue["status"],
             "created_at": issue.get("created_at", ""),
-            "ai_analysis": issue.get("ai_analysis"),
-            "admin_notes": issue.get("admin_notes"),
-            "resolution": issue.get("resolution")
-        })
+        }
+        
+        # Only Super Admin can see resolution details, admin notes, and AI analysis
+        if is_super_admin:
+            issue_data["ai_analysis"] = issue.get("ai_analysis")
+            issue_data["admin_notes"] = issue.get("admin_notes")
+            issue_data["resolution"] = issue.get("resolution")
+        else:
+            # Admin/User can only see if resolved or not, not HOW it was resolved
+            issue_data["ai_analysis"] = None
+            issue_data["admin_notes"] = None
+            # Only show that it's resolved, not the resolution details
+            if issue.get("resolution"):
+                issue_data["resolution"] = {
+                    "resolved_at": issue["resolution"].get("resolved_at"),
+                    "note": None,  # Hide the resolution note
+                    "resolved_by": None  # Hide who resolved it
+                }
+            else:
+                issue_data["resolution"] = None
+        
+        issues.append(issue_data)
     
     return issues
 
