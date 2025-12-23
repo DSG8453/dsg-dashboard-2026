@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { authAPI, credentialsAPI, devicesAPI } from "@/services/api";
 import { getDeviceInfo, setStoredDeviceStatus, clearStoredDeviceStatus } from "@/utils/deviceFingerprint";
-import { useWebSocket, NotificationType } from "@/hooks/useWebSocket";
+import { NotificationType } from "@/hooks/useWebSocket";
 
 const AuthContext = createContext(null);
 
@@ -12,45 +12,12 @@ export const AuthProvider = ({ children }) => {
   const [deviceStatus, setDeviceStatus] = useState(null); // 'pending', 'approved', 'rejected', 'revoked'
   const [deviceInfo, setDeviceInfo] = useState(null);
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
+  const [wsConnected, setWsConnected] = useState(false);
+  const wsRef = useRef(null);
+  const pingIntervalRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
   
-  // Callback for WebSocket messages
-  const handleWebSocketMessage = useCallback((data) => {
-    console.log('[Auth] WebSocket message:', data);
-    
-    switch (data.type) {
-      case NotificationType.TOOL_ACCESS_UPDATED:
-      case NotificationType.TOOL_DELETED:
-      case NotificationType.TOOL_CREATED:
-      case NotificationType.REFRESH_DASHBOARD:
-        // Trigger dashboard refresh
-        setDashboardRefreshKey(prev => prev + 1);
-        break;
-        
-      case NotificationType.ROLE_CHANGED:
-        // Update user role and refresh
-        if (data.new_role) {
-          setUser(prev => prev ? { ...prev, role: data.new_role } : prev);
-        }
-        setDashboardRefreshKey(prev => prev + 1);
-        break;
-        
-      case NotificationType.USER_SUSPENDED:
-        // Force logout
-        setTimeout(() => {
-          logout();
-          window.location.href = '/login';
-        }, 3000);
-        break;
-        
-      default:
-        break;
-    }
-  }, []);
-  
-  // Initialize WebSocket connection
-  const { isConnected: wsConnected } = useWebSocket(token, handleWebSocketMessage);
-
-  // Logout function
+  // Logout function - defined early so it can be used in WebSocket handler
   const logout = useCallback(() => {
     setUser(null);
     setToken(null);
@@ -60,6 +27,101 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("dsg_user");
     clearStoredDeviceStatus();
   }, []);
+  
+  // WebSocket connection effect
+  useEffect(() => {
+    if (!token) return;
+    
+    const connectWebSocket = () => {
+      // Get WebSocket URL from backend URL
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
+      const wsProtocol = backendUrl.startsWith('https') ? 'wss' : 'ws';
+      const wsHost = backendUrl.replace(/^https?:\/\//, '').replace(/\/api$/, '');
+      const wsUrl = `${wsProtocol}://${wsHost}/ws/${token}`;
+      
+      try {
+        wsRef.current = new WebSocket(wsUrl);
+        
+        wsRef.current.onopen = () => {
+          console.log('[WS] Connected');
+          setWsConnected(true);
+          
+          // Start ping interval
+          pingIntervalRef.current = setInterval(() => {
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send('ping');
+            }
+          }, 30000);
+        };
+        
+        wsRef.current.onmessage = (event) => {
+          if (event.data === 'pong') return;
+          
+          try {
+            const data = JSON.parse(event.data);
+            console.log('[WS] Message received:', data);
+            
+            // Handle notification
+            switch (data.type) {
+              case NotificationType.TOOL_ACCESS_UPDATED:
+              case NotificationType.TOOL_DELETED:
+              case NotificationType.TOOL_CREATED:
+              case NotificationType.REFRESH_DASHBOARD:
+                setDashboardRefreshKey(prev => prev + 1);
+                break;
+                
+              case NotificationType.ROLE_CHANGED:
+                if (data.new_role) {
+                  setUser(prev => prev ? { ...prev, role: data.new_role } : prev);
+                }
+                setDashboardRefreshKey(prev => prev + 1);
+                break;
+                
+              case NotificationType.USER_SUSPENDED:
+                setTimeout(() => {
+                  logout();
+                  window.location.href = '/login';
+                }, 3000);
+                break;
+                
+              default:
+                break;
+            }
+          } catch (error) {
+            console.error('[WS] Error parsing message:', error);
+          }
+        };
+        
+        wsRef.current.onclose = () => {
+          console.log('[WS] Disconnected');
+          setWsConnected(false);
+          if (pingIntervalRef.current) {
+            clearInterval(pingIntervalRef.current);
+          }
+        };
+        
+        wsRef.current.onerror = (error) => {
+          console.error('[WS] Error:', error);
+        };
+      } catch (error) {
+        console.error('[WS] Connection error:', error);
+      }
+    };
+    
+    connectWebSocket();
+    
+    return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close(1000);
+      }
+    };
+  }, [token, logout]);
 
   // Register device and check approval status
   const registerDevice = useCallback(async (currentUser) => {
