@@ -53,6 +53,9 @@
     if (usernameInput && passwordInput) {
       console.log('[DSG Extension] Found login fields, filling...');
       
+      // IMPORTANT: Disable Chrome's password save prompt by modifying autocomplete attributes
+      disablePasswordSavePrompt(usernameInput, passwordInput);
+      
       // Fill username
       fillField(usernameInput, creds.username);
       
@@ -81,6 +84,53 @@
       // Retry a few times with increasing delays
       retryFillCredentials(creds, 1);
     }
+  }
+  
+  // Prevent Chrome from showing "Save Password?" prompt
+  function disablePasswordSavePrompt(usernameInput, passwordInput) {
+    console.log('[DSG Extension] Disabling password save prompt...');
+    
+    // Method 1: Set autocomplete attributes to prevent password manager detection
+    usernameInput.setAttribute('autocomplete', 'off');
+    usernameInput.setAttribute('data-lpignore', 'true'); // LastPass ignore
+    usernameInput.setAttribute('data-form-type', 'other'); // Generic form type
+    
+    passwordInput.setAttribute('autocomplete', 'new-password');
+    passwordInput.setAttribute('data-lpignore', 'true');
+    passwordInput.setAttribute('data-form-type', 'other');
+    
+    // Method 2: Find and modify the parent form
+    const form = usernameInput.closest('form') || passwordInput.closest('form');
+    if (form) {
+      form.setAttribute('autocomplete', 'off');
+      form.setAttribute('data-lpignore', 'true');
+      
+      // Method 3: Intercept form submission to prevent password save dialog
+      form.addEventListener('submit', function(e) {
+        // Reset autocomplete temporarily before submit
+        passwordInput.setAttribute('autocomplete', 'new-password');
+      }, true);
+    }
+    
+    // Method 4: Create a hidden dummy password field to confuse password managers
+    // This is a well-known technique used by many banking sites
+    const dummyContainer = document.createElement('div');
+    dummyContainer.style.cssText = 'position:absolute;top:-9999px;left:-9999px;';
+    dummyContainer.innerHTML = `
+      <input type="text" name="dsg_dummy_user_${Date.now()}" autocomplete="username">
+      <input type="password" name="dsg_dummy_pass_${Date.now()}" autocomplete="current-password">
+    `;
+    document.body.appendChild(dummyContainer);
+    
+    // Method 5: Temporarily change password field type during fill
+    // This prevents some password managers from detecting the fill
+    const originalType = passwordInput.type;
+    passwordInput.type = 'text';
+    setTimeout(() => {
+      passwordInput.type = originalType;
+    }, 50);
+    
+    console.log('[DSG Extension] Password save prompt prevention applied');
   }
   
   function retryFillCredentials(creds, attempt) {
