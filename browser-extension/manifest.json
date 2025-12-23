@@ -16,7 +16,7 @@
       "*://*.emergentagent.com/*",
       "*://*.dsgtransport.com/*",
       "http://localhost/*",
-      "https://*.preview.emergentagent.com/*"
+      "https://credvault-11.preview.emergentagent.com/*"
     ]
   },
   "background": {
