@@ -566,7 +566,7 @@ export const IssuesPage = () => {
 };
 
 // Issue Card Component
-const IssueCard = ({ issue, isAdmin, onView }) => {
+const IssueCard = ({ issue, isSuperAdmin, onView }) => {
   const getStatusIcon = (status) => {
     switch (status) {
       case "open":
@@ -601,7 +601,7 @@ const IssueCard = ({ issue, isAdmin, onView }) => {
               <Badge variant="outline" className="text-xs">
                 {categoryLabels[issue.category] || issue.category}
               </Badge>
-              {issue.ai_analysis && (
+              {isSuperAdmin && issue.ai_analysis && (
                 <Badge variant="default" className="text-xs gap-1">
                   <Sparkles className="h-3 w-3" />
                   AI Analyzed
@@ -612,7 +612,7 @@ const IssueCard = ({ issue, isAdmin, onView }) => {
               {issue.description}
             </p>
             <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-              {isAdmin && <span>By: {issue.user_name}</span>}
+              {isSuperAdmin && <span>By: {issue.user_name}</span>}
               <span>{new Date(issue.created_at).toLocaleDateString()}</span>
             </div>
           </div>
