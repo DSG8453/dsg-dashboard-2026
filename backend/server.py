@@ -67,6 +67,19 @@ async def health_check():
     return {"status": "healthy", "service": "DSG Transport API"}
 
 
+@app.get("/api/download/extension")
+async def download_extension():
+    """Download the DSG Transport browser extension ZIP file"""
+    file_path = os.path.join(os.path.dirname(__file__), "browser-extension.zip")
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Extension file not found")
+    return FileResponse(
+        file_path,
+        media_type="application/zip",
+        filename="dsg-transport-extension.zip"
+    )
+
+
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws/{token}")
 async def websocket_endpoint(websocket: WebSocket, token: str):
