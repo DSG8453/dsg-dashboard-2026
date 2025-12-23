@@ -78,6 +78,7 @@ export const IssuesPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  const isSuperAdmin = user?.role === "Super Administrator";
   const isAdmin = user?.role === "Administrator";
 
   // Refresh issues on mount
@@ -87,8 +88,8 @@ export const IssuesPage = () => {
     }
   }, [user]);
 
-  // Get issues based on role
-  const displayIssues = isAdmin ? issues : issues.filter((i) => i.user_id === user?.id);
+  // Super Admin sees all, others see only their own (filtered by backend)
+  const displayIssues = issues;
 
   // Filter issues
   const filteredIssues = displayIssues.filter((issue) => {
