@@ -83,6 +83,7 @@ export const DevicesPage = () => {
 
   // Only Super Admin can access Devices page
   const isSuperAdmin = user?.role === "Super Administrator";
+  const canManageDevices = isSuperAdmin;  // Super Admin can manage devices
 
   // Redirect non-Super Admin users
   useEffect(() => {
