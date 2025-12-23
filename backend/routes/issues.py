@@ -185,8 +185,15 @@ async def update_issue(issue_id: str, issue_data: IssueUpdate, current_user: dic
 
 @router.post("/{issue_id}/analyze")
 async def analyze_issue(issue_id: str, current_user: dict = Depends(require_admin)):
-    """Send issue to AI for analysis (admin only)"""
+    """Send issue to AI for analysis (Super Admin only)"""
     db = await get_db()
+    
+    # Only Super Admin can analyze issues
+    if current_user["role"] != "Super Administrator":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Super Administrator can analyze issues"
+        )
     
     issue = await db.issues.find_one({"_id": ObjectId(issue_id)})
     if not issue:
