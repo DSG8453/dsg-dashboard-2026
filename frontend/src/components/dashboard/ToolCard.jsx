@@ -675,7 +675,7 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Auto-detected from URL. Edit only if auto-login doesn't work.
+                    Auto-detected from URL. Edit only if auto-login does not work.
                   </p>
                 </div>
 
