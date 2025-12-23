@@ -208,10 +208,7 @@ export const UsersPage = () => {
       // Get current user from users list to find their allowed_tools
       const currentUserData = users.find(u => u.id === currentUser?.id);
       const myAllowedTools = currentUserData?.allowed_tools || [];
-      // If admin has no specific tools assigned, they can't assign any
-      if (myAllowedTools.length === 0) {
-        return allTools; // Or return [] if you want to be strict
-      }
+      // Admin can only assign tools that are assigned to them
       return allTools.filter(tool => myAllowedTools.includes(tool.id));
     }
     return [];
