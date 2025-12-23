@@ -18,7 +18,7 @@ import string
 router = APIRouter()
 
 # Get frontend URL for email links
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://dsg-transport-app.preview.emergentagent.com")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://access-manager-52.preview.emergentagent.com")
 
 @router.get("", response_model=List[dict])
 async def get_users(current_user: dict = Depends(require_admin)):
