@@ -247,10 +247,16 @@ export const devicesAPI = {
 
 // Activity Logs API
 export const activityLogsAPI = {
-  getAll: (limit = 50, activityType = null) => {
+  getAll: (limit = 50, activityType = null, userRole = null, userEmail = null) => {
     let url = `/api/activity-logs?limit=${limit}`;
     if (activityType && activityType !== 'all') {
       url += `&activity_type=${activityType}`;
+    }
+    if (userRole && userRole !== 'all') {
+      url += `&user_role=${encodeURIComponent(userRole)}`;
+    }
+    if (userEmail) {
+      url += `&user_email=${encodeURIComponent(userEmail)}`;
     }
     return fetchAPI(url);
   },
@@ -260,6 +266,22 @@ export const activityLogsAPI = {
       method: 'POST',
       body: JSON.stringify(logData),
     }),
+  
+  // Delete single log
+  delete: (logId) =>
+    fetchAPI(`/api/activity-logs/${logId}`, { method: 'DELETE' }),
+  
+  // Delete all logs for a specific user
+  deleteUserLogs: (userEmail) =>
+    fetchAPI(`/api/activity-logs/user/${encodeURIComponent(userEmail)}`, { method: 'DELETE' }),
+  
+  // Delete all logs
+  deleteAll: () =>
+    fetchAPI('/api/activity-logs/bulk/all', { method: 'DELETE' }),
+  
+  // Get users with logs (for filter dropdown)
+  getUsersWithLogs: () =>
+    fetchAPI('/api/activity-logs/users/list'),
 };
 
 // IP Management API
