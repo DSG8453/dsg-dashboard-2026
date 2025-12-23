@@ -282,8 +282,15 @@ async def resolve_issue(issue_id: str, resolution_note: str, current_user: dict 
 
 @router.delete("/{issue_id}")
 async def delete_issue(issue_id: str, current_user: dict = Depends(require_admin)):
-    """Delete issue (admin only)"""
+    """Delete issue (Super Admin only)"""
     db = await get_db()
+    
+    # Only Super Admin can delete issues
+    if current_user["role"] != "Super Administrator":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Super Administrator can delete issues"
+        )
     
     issue = await db.issues.find_one({"_id": ObjectId(issue_id)})
     if not issue:
