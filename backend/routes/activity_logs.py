@@ -155,3 +155,98 @@ async def create_activity_log(
         "id": str(result.inserted_id),
         "message": "Activity logged successfully"
     }
+
+
+
+# ============ DELETE ENDPOINTS (Super Admin only) ============
+
+@router.delete("/{log_id}")
+async def delete_activity_log(
+    log_id: str,
+    current_user: dict = Depends(require_super_admin)
+):
+    """Delete a single activity log entry (Super Admin only)"""
+    db = await get_db()
+    
+    try:
+        obj_id = ObjectId(log_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid log ID")
+    
+    log = await db.activity_logs.find_one({"_id": obj_id})
+    if not log:
+        raise HTTPException(status_code=404, detail="Activity log not found")
+    
+    await db.activity_logs.delete_one({"_id": obj_id})
+    
+    return {"message": "Activity log deleted successfully"}
+
+
+@router.delete("/user/{user_email}")
+async def delete_user_activity_logs(
+    user_email: str,
+    current_user: dict = Depends(require_super_admin)
+):
+    """Delete all activity logs for a specific user (Super Admin only)"""
+    db = await get_db()
+    
+    # Count logs before deletion
+    count = await db.activity_logs.count_documents({"user_email": user_email})
+    
+    if count == 0:
+        raise HTTPException(status_code=404, detail=f"No activity logs found for {user_email}")
+    
+    # Delete all logs for this user
+    result = await db.activity_logs.delete_many({"user_email": user_email})
+    
+    return {
+        "message": f"Deleted {result.deleted_count} activity log(s) for {user_email}",
+        "deleted_count": result.deleted_count
+    }
+
+
+@router.delete("/bulk/all")
+async def delete_all_activity_logs(
+    current_user: dict = Depends(require_super_admin)
+):
+    """Delete ALL activity logs (Super Admin only) - Use with caution!"""
+    db = await get_db()
+    
+    count = await db.activity_logs.count_documents({})
+    
+    if count == 0:
+        raise HTTPException(status_code=404, detail="No activity logs to delete")
+    
+    result = await db.activity_logs.delete_many({})
+    
+    return {
+        "message": f"Deleted all {result.deleted_count} activity logs",
+        "deleted_count": result.deleted_count
+    }
+
+
+@router.get("/users/list")
+async def get_users_with_logs(
+    current_user: dict = Depends(require_super_admin)
+):
+    """Get list of users who have activity logs (for dropdown filter)"""
+    db = await get_db()
+    
+    # Get unique user emails from activity logs
+    pipeline = [
+        {"$group": {"_id": "$user_email", "count": {"$sum": 1}, "user_name": {"$first": "$user_name"}}},
+        {"$sort": {"count": -1}}
+    ]
+    
+    users = []
+    async for doc in db.activity_logs.aggregate(pipeline):
+        # Get user role from users collection
+        user = await db.users.find_one({"email": doc["_id"]}, {"role": 1})
+        users.append({
+            "email": doc["_id"],
+            "name": doc.get("user_name", doc["_id"]),
+            "role": user.get("role", "Unknown") if user else "Unknown",
+            "log_count": doc["count"]
+        })
+    
+    return users
