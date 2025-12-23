@@ -42,9 +42,17 @@ async def get_tools(current_user: dict = Depends(get_current_user)):
             "has_credentials": bool(tool.get("credentials"))
         }
         
-        # Only Super Admin can see credentials
-        if is_super_admin and tool.get("credentials"):
-            tool_data["credentials"] = tool.get("credentials")
+        # For Admin/Users - include login_url so they can access tools directly
+        # But DON'T include username/password - they just need the URL
+        if tool.get("credentials"):
+            credentials = tool.get("credentials", {})
+            # Everyone gets login_url for direct access
+            if credentials.get("login_url"):
+                tool_data["credentials"] = {"login_url": credentials.get("login_url")}
+            
+            # Only Super Admin can see full credentials (username, password, notes)
+            if is_super_admin:
+                tool_data["credentials"] = credentials
         
         tools.append(tool_data)
     
