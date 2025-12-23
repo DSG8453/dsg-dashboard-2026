@@ -206,6 +206,75 @@ a{{color:#3b82f6;margin-top:20px;display:inline-block}}
 </html>'''
 
 
+@router.post("/{tool_id}/extension-payload")
+async def get_extension_payload(
+    tool_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get encrypted credential payload for browser extension.
+    Returns data that only the extension can decrypt and use.
+    """
+    db = await get_db()
+    
+    try:
+        obj_id = ObjectId(tool_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid tool ID")
+    
+    tool = await db.tools.find_one({"_id": obj_id})
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
+    
+    # Check if user has access to this tool
+    if current_user.get("role") != "Super Administrator":
+        user_data = await db.users.find_one({"_id": ObjectId(current_user["id"])})
+        allowed_tools = user_data.get("allowed_tools", []) if user_data else []
+        if tool_id not in allowed_tools:
+            raise HTTPException(status_code=403, detail="You don't have access to this tool")
+    
+    credentials = tool.get("credentials", {})
+    login_url = credentials.get("login_url") or tool.get("url", "#")
+    
+    if not login_url or login_url == "#":
+        raise HTTPException(status_code=400, detail="Tool URL not configured")
+    
+    username = credentials.get("username", "")
+    password = credentials.get("password", "")
+    
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Tool credentials not configured")
+    
+    # Create payload for extension
+    payload = {
+        "loginUrl": login_url,
+        "username": username,
+        "password": password,
+        "usernameField": credentials.get("username_field", "username"),
+        "passwordField": credentials.get("password_field", "password"),
+        "toolName": tool.get("name"),
+        "toolId": tool_id,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Log access
+    await db.activity_logs.insert_one({
+        "user_email": current_user["email"],
+        "user_name": current_user.get("name", current_user["email"]),
+        "action": "Extension Auto-Login",
+        "target": tool.get("name"),
+        "details": f"Secure auto-login via browser extension to {tool.get('name')}",
+        "activity_type": "access",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {
+        "success": True,
+        "payload": payload,
+        "toolName": tool.get("name")
+    }
+
+
 @router.delete("/tokens/cleanup")
 async def cleanup_expired_tokens(current_user: dict = Depends(get_current_user)):
     """Clean up expired tokens"""
