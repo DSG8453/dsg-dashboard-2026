@@ -5,7 +5,7 @@ from routes.auth import get_current_user, require_admin
 from bson import ObjectId
 from typing import List, Optional
 from pydantic import BaseModel
-from utils.websocket_manager import notify_tool_deleted, notify_tool_access_change
+from utils.websocket_manager import notify_tool_deleted, notify_tool_access_change, notify_tool_created, notify_tool_updated
 
 router = APIRouter()
 
