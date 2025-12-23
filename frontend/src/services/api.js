@@ -159,6 +159,10 @@ export const toolsAPI = {
   // Gateway access - access tool through dashboard proxy
   startGatewaySession: (toolId) =>
     fetchAPI(`/api/gateway/start/${toolId}`, { method: 'POST' }),
+  
+  // Get credentials payload for browser extension
+  getExtensionPayload: (toolId) =>
+    fetchAPI(`/api/secure-access/${toolId}/extension-payload`, { method: 'POST' }),
 };
 
 // Credentials API
