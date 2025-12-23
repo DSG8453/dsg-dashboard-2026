@@ -288,9 +288,19 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
               variant="gradient"
               className="flex-1 gap-2"
               onClick={handleAccess}
+              disabled={isAccessingTool}
             >
-              <ExternalLink className="h-4 w-4" />
-              Access Tool
+              {isAccessingTool ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <Shield className="h-4 w-4" />
+                  Secure Access
+                </>
+              )}
             </Button>
             
             {/* Edit button - Super Admin only */}
