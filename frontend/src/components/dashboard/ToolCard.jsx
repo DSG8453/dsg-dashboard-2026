@@ -58,7 +58,8 @@ import {
   Globe,
   Link,
   User,
-  FileText
+  FileText,
+  Shield
 } from "lucide-react";
 import { toast } from "sonner";
 
