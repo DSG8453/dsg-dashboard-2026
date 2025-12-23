@@ -122,7 +122,7 @@ def format_time_ago(iso_timestamp: str) -> str:
         else:
             weeks = int(seconds / 604800)
             return f"{weeks} week{'s' if weeks != 1 else ''} ago"
-    except:
+    except Exception:
         return "Unknown"
 
 
