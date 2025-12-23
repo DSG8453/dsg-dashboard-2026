@@ -82,7 +82,7 @@ const categoryOptions = [
 ];
 
 export const DashboardPage = ({ currentUser }) => {
-  const { user, addToolCredential } = useAuth();
+  const { user, addToolCredential, dashboardRefreshKey } = useAuth();
   const [tools, setTools] = useState([]);
   const [usersCount, setUsersCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
