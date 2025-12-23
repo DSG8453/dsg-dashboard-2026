@@ -80,7 +80,17 @@ Use REACT_APP_BACKEND_URL from /app/frontend/.env with /api prefix
 - Activity Log should be visible to Super Admin ONLY (implemented)
 
 ## Last Test Result
-Activity Log Super Admin restriction - VERIFIED:
-1. Backend returns 403 "Super Admin access required" for Admin users
-2. Frontend hides Activity Logs tab from Admin navbar
-3. Frontend redirects Admin to Dashboard when accessing /activity-logs directly
+- Change Role Feature - VERIFIED:
+  1. Added missing handleChangeRole function in UsersPage.jsx
+  2. Tested via API: Successfully changed Test Admin from Administrator to User and back
+  3. Tested via UI: Role dropdown works, shows "Admin" and "User" options, updates immediately
+  
+- Devices Page Error - FIXED:
+  1. Error: canManageDevices is not defined
+  2. Fix: Added `const canManageDevices = isSuperAdmin;` definition
+  3. Devices page now loads correctly for Super Admin
+  
+- Users Created:
+  1. info@dsgtransport.net (Super Administrator) - Super Admin
+  2. info@dsgtransport.com (User) - User role as requested
+  3. admin@dsgtransport.com (Administrator) - Admin role as requested
