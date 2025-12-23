@@ -13,6 +13,7 @@ import aiohttp
 import secrets
 import hashlib
 import json
+import base64
 import re
 from urllib.parse import urljoin, urlparse
 
