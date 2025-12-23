@@ -4,42 +4,80 @@
   <meta charset="UTF-8">
   <style>
     body {
-      width: 280px;
-      padding: 16px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      width: 300px;
+      padding: 20px;
+      font-family: system-ui, -apple-system, sans-serif;
       background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
       color: white;
       margin: 0;
     }
-    .logo {
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .header svg {
+      width: 36px;
+      height: 36px;
+      color: #3b82f6;
+    }
+    .header h1 {
+      font-size: 16px;
+      margin: 0;
+      font-weight: 600;
+    }
+    .header p {
+      font-size: 11px;
+      opacity: 0.7;
+      margin: 4px 0 0 0;
+    }
+    .status {
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      margin-bottom: 16px;
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 16px;
     }
-    .logo svg {
-      width: 32px;
-      height: 32px;
+    .status.pending {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: rgba(59, 130, 246, 0.3);
     }
-    .logo h1 {
-      font-size: 16px;
-      margin: 0;
-    }
-    .status {
-      background: rgba(255,255,255,0.1);
-      padding: 12px;
-      border-radius: 8px;
-      font-size: 13px;
-      margin-bottom: 12px;
-    }
-    .status.active {
-      background: rgba(34, 197, 94, 0.2);
-      border: 1px solid rgba(34, 197, 94, 0.3);
+    .status-icon {
+      font-size: 20px;
     }
     .info {
-      font-size: 11px;
-      opacity: 0.7;
-      line-height: 1.4;
+      font-size: 12px;
+      opacity: 0.8;
+      line-height: 1.5;
+    }
+    .info strong {
+      color: #60a5fa;
+    }
+    .steps {
+      margin-top: 16px;
+      padding: 14px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+      font-size: 12px;
+    }
+    .steps h3 {
+      margin: 0 0 10px 0;
+      font-size: 13px;
+    }
+    .steps ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+    .steps li {
+      margin-bottom: 6px;
+      opacity: 0.9;
     }
     a {
       color: #60a5fa;
@@ -51,24 +89,34 @@
   </style>
 </head>
 <body>
-  <div class="logo">
+  <div class="header">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
     </svg>
-    <h1>DSG Transport</h1>
+    <div>
+      <h1>DSG Transport</h1>
+      <p>Secure Login Extension</p>
+    </div>
   </div>
   
   <div class="status" id="status">
-    Extension active
+    <span class="status-icon">✅</span>
+    <span>Extension active and ready</span>
   </div>
   
   <div class="info">
-    This extension enables secure auto-login for DSG Transport tools.<br><br>
     <strong>How it works:</strong><br>
-    1. Click "Secure Access" on any tool<br>
-    2. Login page opens automatically<br>
-    3. Credentials are filled securely<br><br>
-    <a href="https://access-manager-52.preview.emergentagent.com" target="_blank">Open DSG Portal →</a>
+    When you click "Open Tool" in the DSG Transport dashboard, this extension will automatically fill your login credentials - you'll never see or know the actual passwords.
+  </div>
+  
+  <div class="steps">
+    <h3>Quick Guide:</h3>
+    <ol>
+      <li>Go to DSG Transport dashboard</li>
+      <li>Click "Open Tool" on any tool</li>
+      <li>Credentials auto-fill automatically</li>
+      <li>Just click Login!</li>
+    </ol>
   </div>
   
   <script src="popup.js"></script>
