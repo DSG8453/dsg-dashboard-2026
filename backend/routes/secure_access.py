@@ -85,7 +85,8 @@ async def request_tool_access(
         "created_at": datetime.now(timezone.utc).isoformat()
     })
     
-    return {
+    # Prepare response
+    response_data = {
         "access_token": access_token,
         "access_url": f"/api/secure-access/launch/{access_token}",
         "tool_name": tool.get("name"),
@@ -93,6 +94,19 @@ async def request_tool_access(
         "login_url": login_url,
         "expires_in": 300
     }
+    
+    # Include extension data for browser extension auto-fill
+    # This data is used by the DSG Transport browser extension
+    if has_credentials and credentials:
+        response_data["extension_data"] = {
+            "login_url": login_url,
+            "username": credentials.get("username", ""),
+            "password": credentials.get("password", ""),
+            "username_field": credentials.get("username_field", "username"),
+            "password_field": credentials.get("password_field", "password")
+        }
+    
+    return response_data
 
 
 @router.get("/launch/{access_token}")
