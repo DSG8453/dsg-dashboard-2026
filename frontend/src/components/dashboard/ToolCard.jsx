@@ -188,6 +188,8 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
           username: editForm.credentials.username,
           password: editForm.credentials.password,
           login_url: editForm.credentials.login_url,
+          username_field: editForm.credentials.username_field || "username",
+          password_field: editForm.credentials.password_field || "password",
           notes: editForm.credentials.notes
         } : null
       };
