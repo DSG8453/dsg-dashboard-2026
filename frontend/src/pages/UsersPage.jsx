@@ -556,7 +556,11 @@ export const UsersPage = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">User Management</h1>
-          <p className="text-muted-foreground">Manage team members, access levels, and permissions</p>
+          <p className="text-muted-foreground">
+            {isSuperAdmin 
+              ? "Manage team members, access levels, and permissions" 
+              : "Manage your assigned team members and their tool access"}
+          </p>
         </div>
 
         {/* Only Super Admin can add new users */}
@@ -568,18 +572,32 @@ export const UsersPage = () => {
         )}
       </div>
 
+      {/* Info banner for Admins */}
+      {isAdmin && !isSuperAdmin && (
+        <div className="mb-6 p-4 rounded-lg bg-admin/5 border border-admin/20">
+          <div className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-admin" />
+            <span className="font-medium text-admin">Admin View</span>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            You can only see and manage users assigned to you by the Super Admin. 
+            Contact Super Admin to get more users assigned.
+          </p>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <Card className="border-2 border-border/50">
           <CardContent className="p-4">
-            <p className="text-2xl font-bold text-foreground">{users.length}</p>
-            <p className="text-sm text-muted-foreground">Total Users</p>
+            <p className="text-2xl font-bold text-foreground">{users.filter(u => u.role === "User").length}</p>
+            <p className="text-sm text-muted-foreground">{isSuperAdmin ? "Total Users" : "My Users"}</p>
           </CardContent>
         </Card>
         <Card className="border-2 border-border/50">
           <CardContent className="p-4">
             <p className="text-2xl font-bold text-success">
-              {users.filter((u) => u.status === "Active").length}
+              {users.filter((u) => u.status === "Active" && u.role === "User").length}
             </p>
             <p className="text-sm text-muted-foreground">Active</p>
           </CardContent>
