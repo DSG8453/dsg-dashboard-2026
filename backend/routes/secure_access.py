@@ -1,6 +1,6 @@
 """
 Secure Tool Access Service - Zero Visibility Credentials
-Credentials are NEVER shown to users - login happens automatically in background
+Credentials are NEVER shown to users - login happens automatically via browser extension
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -12,11 +12,17 @@ import secrets
 import hashlib
 import base64
 import json
+from cryptography.fernet import Fernet
+import os
 
 router = APIRouter()
 
 # Store one-time access tokens
 access_tokens = {}
+
+# Encryption key for extension payloads (generate once)
+EXTENSION_KEY = os.environ.get("EXTENSION_KEY", Fernet.generate_key().decode())
+fernet = Fernet(EXTENSION_KEY.encode() if isinstance(EXTENSION_KEY, str) else EXTENSION_KEY)
 
 
 @router.post("/{tool_id}/request-access")
