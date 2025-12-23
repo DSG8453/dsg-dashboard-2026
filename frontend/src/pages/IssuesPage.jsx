@@ -193,15 +193,29 @@ export const IssuesPage = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">
-            {isAdmin ? "All Reported Issues" : "My Reported Issues"}
+            {isSuperAdmin ? "All Reported Issues" : "My Reported Issues"}
           </h1>
           <p className="text-muted-foreground">
-            {isAdmin
+            {isSuperAdmin
               ? "View and manage all user-reported issues"
               : "Track the status of your reported issues"}
           </p>
         </div>
       </div>
+
+      {/* Info banner for non-Super Admin users */}
+      {!isSuperAdmin && (
+        <div className="mb-6 p-4 rounded-lg bg-muted/50 border border-border">
+          <div className="flex items-center gap-2">
+            <Eye className="h-5 w-5 text-muted-foreground" />
+            <span className="font-medium">Limited View</span>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            You can see the status of your issues (Open, In Progress, Resolved). 
+            Resolution details are only visible to Super Admin.
+          </p>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
