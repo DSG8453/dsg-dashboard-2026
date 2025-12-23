@@ -101,12 +101,22 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
   const isSuperAdmin = user?.role === "Super Administrator";
   const hasCredentials = tool.has_credentials || (tool.credentials && (tool.credentials.username || tool.credentials.password));
 
-  // Handle tool access - just open the URL directly
+  // Handle tool access - open the tool URL directly (or login URL if available)
   const handleAccess = () => {
-    if (tool.url && tool.url !== "#") {
-      window.open(tool.url, "_blank", "noopener,noreferrer");
+    // Prefer login URL if credentials are configured, otherwise use main URL
+    const accessUrl = tool.credentials?.login_url || tool.url;
+    
+    if (accessUrl && accessUrl !== "#" && accessUrl !== "") {
+      window.open(accessUrl, "_blank", "noopener,noreferrer");
+      
+      // Log access for activity tracking
+      toast.success(`Opening ${tool.name}`, {
+        description: "Tool opened in new tab"
+      });
     } else {
-      toast.info("Tool URL not configured");
+      toast.info("Tool URL not configured", {
+        description: "Please contact Super Admin to configure this tool's URL"
+      });
     }
   };
 
