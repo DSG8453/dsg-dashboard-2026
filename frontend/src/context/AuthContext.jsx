@@ -310,6 +310,8 @@ export const AuthProvider = ({ children }) => {
     deviceStatus,
     deviceInfo,
     isDeviceApproved,
+    wsConnected,
+    dashboardRefreshKey,
     login,
     loginWithGoogle,
     verifyOtp,
