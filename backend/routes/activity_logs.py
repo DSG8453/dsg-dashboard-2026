@@ -170,7 +170,7 @@ async def delete_activity_log(
     
     try:
         obj_id = ObjectId(log_id)
-    except:
+    except Exception:
         raise HTTPException(status_code=400, detail="Invalid log ID")
     
     log = await db.activity_logs.find_one({"_id": obj_id})
