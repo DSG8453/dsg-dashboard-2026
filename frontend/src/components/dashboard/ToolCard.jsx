@@ -311,11 +311,11 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
           </p>
 
           <div className="flex gap-2">
-            {/* Access Tool button - available to all users */}
+            {/* Gateway Access - secure access through dashboard */}
             <Button
               variant="gradient"
               className="flex-1 gap-2"
-              onClick={handleAccess}
+              onClick={handleGatewayAccess}
               disabled={isAccessingTool}
             >
               {isAccessingTool ? (
@@ -326,7 +326,7 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
               ) : (
                 <>
                   <Shield className="h-4 w-4" />
-                  Secure Access
+                  Open Tool
                 </>
               )}
             </Button>
