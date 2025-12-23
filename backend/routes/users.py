@@ -331,7 +331,7 @@ async def update_tool_access(
     
     try:
         obj_id = ObjectId(user_id)
-    except:
+    except Exception:
         raise HTTPException(status_code=400, detail="Invalid user ID")
     
     user = await db.users.find_one({"_id": obj_id})
@@ -351,6 +351,9 @@ async def update_tool_access(
                 detail="You can only assign tools to users assigned to you"
             )
     
+    # Get previous tools for comparison
+    previous_tools = user.get("allowed_tools", [])
+    
     # Update allowed tools
     await db.users.update_one(
         {"_id": obj_id},
@@ -366,6 +369,21 @@ async def update_tool_access(
         details=f"{len(tool_ids)} tool(s) assigned to {user['email']} by {current_user['email']}",
         activity_type=ActivityType.ADMIN
     )
+    
+    # Notify user in real-time about tool access change
+    user_email = user.get("email")
+    if user_email:
+        added_tools = [t for t in tool_ids if t not in previous_tools]
+        removed_tools = [t for t in previous_tools if t not in tool_ids]
+        
+        if added_tools or removed_tools:
+            action = "updated"
+            if added_tools and not removed_tools:
+                action = "granted"
+            elif removed_tools and not added_tools:
+                action = "revoked"
+            
+            await notify_tool_access_change(user_email, tool_ids, action)
     
     return {
         "message": f"Tool access updated for {user['name']}",
