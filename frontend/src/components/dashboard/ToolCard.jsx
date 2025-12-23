@@ -806,7 +806,7 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
                 <li className="flex gap-3">
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">4</span>
                   <div>
-                    <p className="font-medium">Click "Load unpacked"</p>
+                    <p className="font-medium">Click &quot;Load unpacked&quot;</p>
                     <p className="text-muted-foreground">Select the <code className="px-1 py-0.5 bg-muted rounded">browser-extension</code> folder</p>
                   </div>
                 </li>
