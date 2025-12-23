@@ -407,8 +407,8 @@ export const IssuesPage = () => {
                   </p>
                 </div>
 
-                {/* AI Analysis Section */}
-                {selectedIssue.ai_analysis ? (
+                {/* AI Analysis Section - Only Super Admin can see */}
+                {isSuperAdmin && selectedIssue.ai_analysis ? (
                   <div className="p-4 rounded-lg border border-primary/30 bg-primary/5">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-sm font-medium flex items-center gap-2">
@@ -430,7 +430,7 @@ export const IssuesPage = () => {
                     </p>
                   </div>
                 ) : (
-                  isAdmin && (
+                  isSuperAdmin && (
                     <div className="p-4 rounded-lg border border-dashed border-border">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -462,23 +462,31 @@ export const IssuesPage = () => {
                   )
                 )}
 
-                {/* Resolution (for resolved issues) */}
-                {selectedIssue.resolution && (
+                {/* Resolution (for resolved issues) - Different view for Super Admin vs others */}
+                {selectedIssue.status === "resolved" && (
                   <div className="p-4 rounded-lg bg-success-light border border-success/30">
                     <div className="flex items-center gap-2 mb-2">
                       <CheckCircle className="h-4 w-4 text-success" />
                       <span className="font-medium text-success">Resolved</span>
                     </div>
-                    <p className="text-sm">{selectedIssue.resolution.note}</p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Resolved by {selectedIssue.resolution.resolved_by} on{" "}
-                      {new Date(selectedIssue.resolution.resolved_at).toLocaleString()}
-                    </p>
+                    {isSuperAdmin && selectedIssue.resolution?.note ? (
+                      <>
+                        <p className="text-sm">{selectedIssue.resolution.note}</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Resolved by {selectedIssue.resolution.resolved_by} on{" "}
+                          {new Date(selectedIssue.resolution.resolved_at).toLocaleString()}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Your issue has been resolved. If you have further questions, please submit a new issue.
+                      </p>
+                    )}
                   </div>
                 )}
 
-                {/* Admin-only sections */}
-                {isAdmin && selectedIssue.status !== "resolved" && (
+                {/* Super Admin-only sections */}
+                {isSuperAdmin && selectedIssue.status !== "resolved" && (
                   <>
                     {/* Admin Notes */}
                     <div className="space-y-2">
