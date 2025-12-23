@@ -358,7 +358,7 @@ export const IssuesPage = () => {
                 <IssueCard
                   key={issue.id}
                   issue={issue}
-                  isAdmin={isAdmin}
+                  isSuperAdmin={isSuperAdmin}
                   onView={() => {
                     setSelectedIssue(issue);
                     setAdminNotes(issue.admin_notes || "");
