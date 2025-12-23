@@ -1531,9 +1531,14 @@ export const UsersPage = () => {
                                 </p>
                               )}
                             </div>
-                            <Badge variant={user.status === "Active" ? "success" : "warning"}>
-                              {user.status}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={user.role === "Administrator" ? "admin" : "user"}>
+                                {user.role === "Administrator" ? "Admin" : "User"}
+                              </Badge>
+                              <Badge variant={user.status === "Active" ? "success" : "warning"}>
+                                {user.status}
+                              </Badge>
+                            </div>
                           </div>
                         );
                       })
