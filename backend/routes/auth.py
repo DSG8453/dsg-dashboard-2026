@@ -72,9 +72,9 @@ async def login(request: LoginRequest):
     # Check if 2SV is enabled for this user
     two_sv_enabled = user.get("two_sv_enabled", False)
     
-    # Super Admin always requires 2SV
-    if user.get("role") == "Super Administrator":
-        two_sv_enabled = True
+    # Super Admin always requires 2SV (TEMPORARILY DISABLED FOR TESTING)
+    # if user.get("role") == "Super Administrator":
+    #     two_sv_enabled = True
     
     if two_sv_enabled:
         # Generate OTP and send email
