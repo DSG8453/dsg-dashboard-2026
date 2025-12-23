@@ -1398,7 +1398,7 @@ export const UsersPage = () => {
 
       {/* Assign Users to Admin Dialog (Super Admin only) */}
       <Dialog open={assignUsersDialogOpen} onOpenChange={setAssignUsersDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-5 w-5 text-primary" />
@@ -1409,54 +1409,111 @@ export const UsersPage = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
             {/* Admin Info */}
             <div className="flex items-center gap-3 p-3 rounded-lg bg-admin/5 border border-admin/20">
               <div className="w-10 h-10 rounded-full bg-admin/20 flex items-center justify-center">
                 <Shield className="h-5 w-5 text-admin" />
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="font-semibold">{assignUsersAdmin?.name}</p>
                 <p className="text-sm text-muted-foreground">{assignUsersAdmin?.email}</p>
               </div>
+              <Badge variant="admin">Administrator</Badge>
+            </div>
+
+            {/* Search Box */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search users..."
+                className="pl-10"
+                value={userAssignSearch || ""}
+                onChange={(e) => setUserAssignSearch(e.target.value)}
+              />
+            </div>
+
+            {/* Quick Actions */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedUsersToAssign(getAssignableUsers().map(u => u.id))}
+              >
+                Select All
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedUsersToAssign([])}
+              >
+                Clear All
+              </Button>
             </div>
 
             {/* Users List */}
-            <div>
-              <p className="text-sm font-medium mb-2">Select users to assign:</p>
-              <ScrollArea className="h-64 border rounded-lg p-2">
+            <div className="flex-1 overflow-hidden">
+              <p className="text-sm font-medium mb-2">
+                Available Users ({getAssignableUsers().filter(u => 
+                  !userAssignSearch || 
+                  u.name.toLowerCase().includes(userAssignSearch.toLowerCase()) ||
+                  u.email.toLowerCase().includes(userAssignSearch.toLowerCase())
+                ).length})
+              </p>
+              <ScrollArea className="h-[280px] border rounded-lg p-2">
                 <div className="space-y-2">
-                  {getAssignableUsers().length === 0 ? (
+                  {getAssignableUsers().filter(u => 
+                    !userAssignSearch || 
+                    u.name.toLowerCase().includes(userAssignSearch.toLowerCase()) ||
+                    u.email.toLowerCase().includes(userAssignSearch.toLowerCase())
+                  ).length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
-                      No users available to assign
+                      {userAssignSearch ? "No users found matching your search" : "No users available to assign"}
                     </p>
                   ) : (
-                    getAssignableUsers().map(user => (
-                      <div
-                        key={user.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
-                          selectedUsersToAssign.includes(user.id)
-                            ? "bg-primary/10 border-2 border-primary"
-                            : "bg-muted/30 border-2 border-transparent hover:bg-muted/50"
-                        }`}
-                        onClick={() => handleToggleUserAssignment(user.id)}
-                      >
-                        <Checkbox
-                          checked={selectedUsersToAssign.includes(user.id)}
-                          onCheckedChange={() => handleToggleUserAssignment(user.id)}
-                        />
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
-                          {user.initials}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{user.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                        </div>
-                        <Badge variant={user.status === "Active" ? "success" : "warning"}>
-                          {user.status}
-                        </Badge>
-                      </div>
-                    ))
+                    getAssignableUsers()
+                      .filter(u => 
+                        !userAssignSearch || 
+                        u.name.toLowerCase().includes(userAssignSearch.toLowerCase()) ||
+                        u.email.toLowerCase().includes(userAssignSearch.toLowerCase())
+                      )
+                      .map(user => {
+                        const currentManager = users.find(u => u.id === user.managed_by);
+                        const isAssignedToOther = user.managed_by && user.managed_by !== assignUsersAdmin?.id;
+                        
+                        return (
+                          <div
+                            key={user.id}
+                            className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                              selectedUsersToAssign.includes(user.id)
+                                ? "bg-primary/10 border-2 border-primary"
+                                : "bg-muted/30 border-2 border-transparent hover:bg-muted/50"
+                            }`}
+                            onClick={() => handleToggleUserAssignment(user.id)}
+                          >
+                            <Checkbox
+                              checked={selectedUsersToAssign.includes(user.id)}
+                              onCheckedChange={() => handleToggleUserAssignment(user.id)}
+                            />
+                            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
+                              {user.initials}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{user.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                              {isAssignedToOther && (
+                                <p className="text-xs text-warning flex items-center gap-1 mt-0.5">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Currently managed by: {currentManager?.name || "Another Admin"}
+                                </p>
+                              )}
+                            </div>
+                            <Badge variant={user.status === "Active" ? "success" : "warning"}>
+                              {user.status}
+                            </Badge>
+                          </div>
+                        );
+                      })
                   )}
                 </div>
               </ScrollArea>
@@ -1468,7 +1525,7 @@ export const UsersPage = () => {
                 <span className="font-semibold text-primary">{selectedUsersToAssign.length}</span> user(s) will be managed by this Admin
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Admin can suspend/activate and assign tools to these users only
+                Admin can suspend/activate and assign tools (from their allowed tools) to these users
               </p>
             </div>
 
@@ -1477,7 +1534,10 @@ export const UsersPage = () => {
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={() => setAssignUsersDialogOpen(false)}
+                onClick={() => {
+                  setAssignUsersDialogOpen(false);
+                  setUserAssignSearch("");
+                }}
                 disabled={isSaving}
               >
                 Cancel
