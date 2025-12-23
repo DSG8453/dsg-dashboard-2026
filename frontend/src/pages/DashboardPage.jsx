@@ -108,7 +108,7 @@ export const DashboardPage = ({ currentUser }) => {
   const isAdmin = user?.role === "Administrator";
   const isRegularUser = user?.role === "User";
 
-  // Fetch tools and users count on mount
+  // Fetch tools and users count on mount or when dashboardRefreshKey changes
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -164,7 +164,7 @@ export const DashboardPage = ({ currentUser }) => {
     if (user) {
       fetchData();
     }
-  }, [user, isSuperAdmin]);
+  }, [user, isSuperAdmin, dashboardRefreshKey]); // Added dashboardRefreshKey as dependency
 
   const stats = [
     { value: String(tools.length), label: "Active Tools", variant: "blue", icon: Wrench },
