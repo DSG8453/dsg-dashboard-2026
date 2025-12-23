@@ -18,6 +18,7 @@ from routes.settings import router as settings_router
 from routes.devices import router as devices_router
 from routes.activity_logs import router as activity_logs_router
 from routes.ip_management import router as ip_management_router
+from routes.secure_access import router as secure_access_router
 from database import connect_db, close_db
 from utils.websocket_manager import manager
 
