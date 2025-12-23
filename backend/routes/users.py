@@ -22,13 +22,36 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://secureaccess-15.preview.e
 
 @router.get("", response_model=List[dict])
 async def get_users(current_user: dict = Depends(require_admin)):
-    """Get all users (admin only)"""
+    """Get users based on role:
+    - Super Admin: sees ALL users
+    - Admin: sees ONLY users assigned to them (and themselves)
+    """
     db = await get_db()
+    
+    is_super_admin = current_user.get("role") == "Super Administrator"
+    
+    # For Admin, get their assigned users list
+    assigned_user_ids = []
+    if not is_super_admin:
+        admin_data = await db.users.find_one({"_id": ObjectId(current_user["id"])})
+        if admin_data:
+            assigned_user_ids = admin_data.get("assigned_users", [])
     
     users = []
     async for user in db.users.find():
+        user_id = str(user["_id"])
+        
+        # For Admin: only include themselves and their assigned users
+        if not is_super_admin:
+            # Include current admin themselves
+            if user_id == current_user["id"]:
+                pass  # Include self
+            # Include only assigned users
+            elif user_id not in assigned_user_ids:
+                continue  # Skip users not assigned to this admin
+        
         users.append({
-            "id": str(user["_id"]),
+            "id": user_id,
             "email": user["email"],
             "name": user["name"],
             "role": user["role"],
