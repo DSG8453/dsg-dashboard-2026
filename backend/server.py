@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
