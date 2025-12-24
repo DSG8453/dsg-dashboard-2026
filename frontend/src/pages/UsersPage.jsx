@@ -324,7 +324,7 @@ export const UsersPage = () => {
   );
 
   const handleAddUser = async () => {
-    if (!newUser.name || !newUser.email || !newUser.password) {
+    if (!newUser.name || !newUser.email) {
       toast.error("Please fill in all fields");
       return;
     }
@@ -344,7 +344,6 @@ export const UsersPage = () => {
       setCreatedUserCredentials({
         name: newUser.name,
         email: newUser.email,
-        password: newUser.password,
         emailSent: created.email_sent,
       });
       
