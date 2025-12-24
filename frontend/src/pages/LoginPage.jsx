@@ -22,23 +22,23 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#0891b2' }}>
-      <div className="w-full max-w-sm">
-        {/* Card */}
-        <div className="bg-white shadow-xl rounded-3xl p-8 text-center">
-          {/* Logo - Only truck, text cropped */}
-          <div className="mb-8 overflow-hidden" style={{ height: '60px' }}>
-            <img
-              src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/691ee53ded166d6334e8b9c6/0583cf617_315logodsg_.png"
-              alt="DSG Transport LLC"
-              className="h-20 w-auto mx-auto"
-              style={{ marginTop: '-5px' }}
-            />
-          </div>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[#f0f4f8]">
+      <div className="w-full max-w-md text-center">
+        {/* Logo with text - outside card */}
+        <div className="mb-8">
+          <img
+            src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/691ee53ded166d6334e8b9c6/0583cf617_315logodsg_.png"
+            alt="DSG Transport LLC"
+            className="h-20 w-auto mx-auto"
+          />
+        </div>
 
-          {/* Google Button - Lighter blue with original Google colors */}
+        {/* Card with button only */}
+        <div className="bg-white shadow-lg rounded-2xl p-6">
+          {/* Google Button - Light blue */}
           <Button
-            className="w-full h-14 gap-3 text-base font-medium rounded-xl bg-[#38bdf8] hover:bg-[#7dd3fc] text-white border-0"
+            variant="outline"
+            className="w-full h-12 gap-3 text-base font-medium rounded-lg bg-[#e0f2fe] hover:bg-[#bae6fd] text-gray-700 border border-gray-200"
             onClick={handleGoogleLogin}
             disabled={isLoading}
           >
@@ -59,12 +59,12 @@ export const LoginPage = () => {
               </>
             )}
           </Button>
-
-          {/* Copyright - Bold, smaller, one line */}
-          <p className="text-xs font-bold text-gray-600 mt-6 whitespace-nowrap">
-            © 2025 DSG Transport LLC. All rights reserved.
-          </p>
         </div>
+
+        {/* Copyright - outside card */}
+        <p className="text-xs text-gray-500 mt-6">
+          © 2025 DSG Transport LLC. All rights reserved.
+        </p>
       </div>
     </div>
   );
