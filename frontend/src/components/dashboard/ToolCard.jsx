@@ -160,29 +160,26 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
     setIsAccessingTool(true);
     
     try {
-      // Get credentials payload from backend
+      // Get ENCRYPTED credentials payload from backend
       const response = await toolsAPI.getExtensionPayload(tool.id);
       
-      if (!response.success || !response.payload) {
-        throw new Error('Failed to get credentials');
+      if (!response.success || !response.encrypted) {
+        throw new Error('Failed to get secure access');
       }
       
-      const payload = response.payload;
-      
-      // Send to extension
+      // Send ENCRYPTED payload to extension - credentials NEVER visible to frontend
       if (typeof chrome !== 'undefined' && chrome.runtime) {
         chrome.runtime.sendMessage(
           extensionId,
           {
-            action: 'DSG_AUTO_LOGIN',
-            loginUrl: payload.loginUrl,
-            username: payload.username,
-            password: payload.password,
-            usernameField: payload.usernameField,
-            passwordField: payload.passwordField,
-            toolName: payload.toolName
+            action: 'DSG_SECURE_LOGIN',
+            encryptedPayload: response.encrypted,
+            loginUrl: response.loginUrl,
+            usernameField: response.usernameField,
+            passwordField: response.passwordField,
+            toolName: response.toolName
           },
-          (response) => {
+          (extResponse) => {
             if (chrome.runtime.lastError) {
               console.error('Extension error:', chrome.runtime.lastError);
               toast.error("Extension not responding", {
@@ -196,7 +193,7 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
               return;
             }
             
-            if (response && response.success) {
+            if (extResponse && extResponse.success) {
               toast.success(`Opening ${tool.name}`, {
                 description: "Credentials will auto-fill on the login page",
                 icon: <Shield className="h-4 w-4" />,
