@@ -436,3 +436,184 @@ async def google_oauth_session(request: GoogleSessionRequest):
         "login_method": "google"
     }
 
+
+
+# ============ FORGOT PASSWORD ============
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+@router.post("/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    """
+    Send password reset email to user.
+    Generates a reset token and sends it via email.
+    """
+    from utils.email_service import send_email, is_email_configured
+    from utils.security import hash_password
+    import secrets
+    
+    db = await get_db()
+    
+    # Find user by email
+    user = await db.users.find_one({"email": request.email.lower()})
+    
+    # Always return success to prevent email enumeration
+    if not user:
+        return {"message": "If an account exists with this email, a reset link has been sent."}
+    
+    # Generate reset token (valid for 1 hour)
+    reset_token = secrets.token_urlsafe(32)
+    reset_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    # Store reset token in database
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {
+            "reset_token": reset_token,
+            "reset_token_expires": reset_expires.isoformat()
+        }}
+    )
+    
+    # Get frontend URL from environment
+    frontend_url = os.environ.get("FRONTEND_URL", "https://portal.dsgtransport.net")
+    reset_link = f"{frontend_url}/reset-password?token={reset_token}"
+    
+    # Send email
+    if is_email_configured():
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #1a73e8 0%, #0d5bca 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }}
+                .button {{ display: inline-block; background: #1a73e8; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
+                .footer {{ text-align: center; margin-top: 20px; color: #666; font-size: 12px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🔐 Password Reset</h1>
+                </div>
+                <div class="content">
+                    <p>Hi {user['name']},</p>
+                    <p>We received a request to reset your password for your DSG Transport portal account.</p>
+                    <p>Click the button below to reset your password:</p>
+                    <p style="text-align: center;">
+                        <a href="{reset_link}" class="button">Reset Password</a>
+                    </p>
+                    <p>Or copy and paste this link into your browser:</p>
+                    <p style="word-break: break-all; color: #1a73e8;">{reset_link}</p>
+                    <p><strong>This link will expire in 1 hour.</strong></p>
+                    <p>If you didn't request this, please ignore this email or contact your administrator.</p>
+                </div>
+                <div class="footer">
+                    <p>DSG Transport LLC - Secure Credential Management</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        send_email(
+            to_email=user["email"],
+            subject="🔐 Reset Your DSG Transport Password",
+            html_content=html_content
+        )
+    
+    return {"message": "If an account exists with this email, a reset link has been sent."}
+
+@router.post("/reset-password")
+async def reset_password_with_token(request: ResetPasswordRequest):
+    """
+    Reset password using the token sent via email.
+    """
+    from utils.security import hash_password
+    
+    db = await get_db()
+    
+    # Find user with this reset token
+    user = await db.users.find_one({"reset_token": request.token})
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+    
+    # Check if token is expired
+    token_expires = user.get("reset_token_expires")
+    if token_expires:
+        expiry_time = datetime.fromisoformat(token_expires.replace('Z', '+00:00'))
+        if datetime.now(timezone.utc) > expiry_time:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Reset token has expired. Please request a new one."
+            )
+    
+    # Update password and clear reset token
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {
+                "password": hash_password(request.new_password),
+                "plain_password": request.new_password  # For Super Admin viewing
+            },
+            "$unset": {
+                "reset_token": "",
+                "reset_token_expires": ""
+            }
+        }
+    )
+    
+    return {"message": "Password has been reset successfully. You can now login with your new password."}
+
+@router.post("/change-password")
+async def change_password(request: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Change password for logged-in user.
+    Requires current password for verification.
+    """
+    from utils.security import hash_password
+    
+    db = await get_db()
+    
+    # Get full user record with password
+    user = await db.users.find_one({"_id": ObjectId(current_user["id"])})
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Verify current password
+    if not verify_password(request.current_password, user["password"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect"
+        )
+    
+    # Update password
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {
+            "password": hash_password(request.new_password),
+            "plain_password": request.new_password  # For Super Admin viewing
+        }}
+    )
+    
+    return {"message": "Password changed successfully"}
+
