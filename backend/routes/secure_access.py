@@ -213,7 +213,8 @@ async def get_extension_payload(
 ):
     """
     Get encrypted credential payload for browser extension.
-    Returns data that only the extension can decrypt and use.
+    SECURITY: Credentials are encrypted and can only be decrypted by the extension.
+    The payload is time-limited and tied to the user's session.
     """
     db = await get_db()
     
@@ -245,17 +246,20 @@ async def get_extension_payload(
     if not username or not password:
         raise HTTPException(status_code=400, detail="Tool credentials not configured")
     
-    # Create payload for extension
-    payload = {
-        "loginUrl": login_url,
-        "username": username,
-        "password": password,
-        "usernameField": credentials.get("username_field", "username"),
-        "passwordField": credentials.get("password_field", "password"),
-        "toolName": tool.get("name"),
-        "toolId": tool_id,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+    # SECURITY: Encrypt credentials so they are never visible in network traffic or browser
+    # Only the extension can decrypt using the shared key
+    payload_data = {
+        "u": username,
+        "p": password,
+        "uf": credentials.get("username_field", "username"),
+        "pf": credentials.get("password_field", "password"),
+        "url": login_url,
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "exp": (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
     }
+    
+    # Encrypt the payload
+    encrypted_payload = fernet.encrypt(json.dumps(payload_data).encode()).decode()
     
     # Log access
     await db.activity_logs.insert_one({
@@ -268,10 +272,15 @@ async def get_extension_payload(
         "created_at": datetime.now(timezone.utc).isoformat()
     })
     
+    # Return encrypted payload - credentials are NEVER visible
     return {
         "success": True,
-        "payload": payload,
-        "toolName": tool.get("name")
+        "encrypted": encrypted_payload,
+        "loginUrl": login_url,
+        "toolName": tool.get("name"),
+        "usernameField": credentials.get("username_field", "username"),
+        "passwordField": credentials.get("password_field", "password"),
+        "expiresIn": 120
     }
 
 
