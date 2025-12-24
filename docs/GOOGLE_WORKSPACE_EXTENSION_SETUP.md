@@ -34,7 +34,7 @@ This guide explains how to deploy the DSG Transport Secure Login extension to al
    - **Extension ID**: Leave blank for now (we'll configure via policy)
    - **Installation URL**: 
      ```
-     https://securepass-42.preview.emergentagent.com/extension-update.xml
+     https://zerovjsible.preview.emergentagent.com/extension-update.xml
      ```
 3. Click **Save**
 
@@ -48,7 +48,7 @@ This guide explains how to deploy the DSG Transport Secure Login extension to al
    ```json
    {
      "installation_mode": "force_installed",
-     "update_url": "https://securepass-42.preview.emergentagent.com/extension-update.xml"
+     "update_url": "https://zerovjsible.preview.emergentagent.com/extension-update.xml"
    }
    ```
 
@@ -113,9 +113,9 @@ This means the extension is not force-installed. Check:
 
 | File | URL |
 |------|-----|
-| Extension ZIP | `https://securepass-42.preview.emergentagent.com/dsg-transport-extension.zip` |
-| Update Manifest | `https://securepass-42.preview.emergentagent.com/extension-update.xml` |
-| Policy JSON | `https://securepass-42.preview.emergentagent.com/extension-policy.json` |
+| Extension ZIP | `https://zerovjsible.preview.emergentagent.com/dsg-transport-extension.zip` |
+| Update Manifest | `https://zerovjsible.preview.emergentagent.com/extension-update.xml` |
+| Policy JSON | `https://zerovjsible.preview.emergentagent.com/extension-policy.json` |
 
 ---
 

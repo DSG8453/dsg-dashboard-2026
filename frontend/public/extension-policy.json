@@ -2,7 +2,7 @@
   "ExtensionSettings": {
     "dsg-transport-secure-login": {
       "installation_mode": "force_installed",
-      "update_url": "https://securepass-42.preview.emergentagent.com/extension-update.xml"
+      "update_url": "https://zerovjsible.preview.emergentagent.com/extension-update.xml"
     }
   }
 }
