@@ -69,7 +69,7 @@ export const Navbar = ({ currentUser }) => {
 
   const handleLogout = () => {
     logout();
-    navigate("/login");
+    navigate("/login", { replace: true });
   };
 
   // Navigation items based on role
