@@ -17,8 +17,8 @@ import string
 
 router = APIRouter()
 
-# Get frontend URL for email links
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://securepass-42.preview.emergentagent.com")
+# Get frontend URL for email links - must be set in environment
+FRONTEND_URL = os.environ.get("FRONTEND_URL")
 
 @router.get("", response_model=List[dict])
 async def get_users(current_user: dict = Depends(require_admin)):
