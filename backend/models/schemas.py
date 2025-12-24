@@ -50,7 +50,8 @@ class UserBase(BaseModel):
     access_level: AccessLevel = AccessLevel.STANDARD
 
 class UserCreate(UserBase):
-    password: str
+    # Password is optional - Google SSO users don't need it
+    password: Optional[str] = None
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
