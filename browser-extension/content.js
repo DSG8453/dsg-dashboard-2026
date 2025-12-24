@@ -1,10 +1,13 @@
 // DSG Transport Secure Login - Content Script
-// Auto-fills credentials on login pages
+// Auto-fills credentials AND auto-clicks login button for seamless access
 
 (function() {
   'use strict';
   
   console.log('[DSG Extension] Content script loaded on:', window.location.href);
+  
+  // Show loading overlay immediately if we have pending login
+  let loadingOverlay = null;
   
   // Wait for page to be ready, then check for pending login
   if (document.readyState === 'loading') {
@@ -14,19 +17,121 @@
   }
   
   function initAutoFill() {
+    // Check immediately for pending login to show overlay ASAP
+    chrome.runtime.sendMessage({ action: 'GET_PENDING_LOGIN' }, (pending) => {
+      if (pending && !chrome.runtime.lastError) {
+        // Show loading overlay immediately
+        showLoadingOverlay(pending.toolName);
+      }
+    });
+    
     // Small delay to ensure page is fully rendered
-    setTimeout(checkAndFillCredentials, 1000);
+    setTimeout(checkAndFillCredentials, 800);
+  }
+  
+  function showLoadingOverlay(toolName) {
+    if (loadingOverlay) return; // Already showing
+    
+    loadingOverlay = document.createElement('div');
+    loadingOverlay.id = 'dsg-loading-overlay';
+    loadingOverlay.innerHTML = `
+      <div class="dsg-loading-content">
+        <div class="dsg-loading-spinner"></div>
+        <div class="dsg-loading-logo">🔐 DSG Transport</div>
+        <div class="dsg-loading-text">Signing you into ${toolName || 'tool'}...</div>
+        <div class="dsg-loading-subtext">Please wait, this only takes a moment</div>
+      </div>
+    `;
+    
+    loadingOverlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2147483647;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    `;
+    
+    // Add styles
+    const style = document.createElement('style');
+    style.id = 'dsg-loading-styles';
+    style.textContent = `
+      .dsg-loading-content {
+        text-align: center;
+        color: white;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      .dsg-loading-spinner {
+        width: 50px;
+        height: 50px;
+        border: 4px solid rgba(255,255,255,0.2);
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: dsg-spin 1s linear infinite;
+        margin: 0 auto 20px;
+      }
+      .dsg-loading-logo {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 16px;
+        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      .dsg-loading-text {
+        font-size: 18px;
+        font-weight: 500;
+        margin-bottom: 8px;
+      }
+      .dsg-loading-subtext {
+        font-size: 14px;
+        color: #94a3b8;
+      }
+      @keyframes dsg-spin {
+        to { transform: rotate(360deg); }
+      }
+    `;
+    
+    document.head.appendChild(style);
+    document.body.appendChild(loadingOverlay);
+    
+    // Fade in
+    requestAnimationFrame(() => {
+      loadingOverlay.style.opacity = '1';
+    });
+    
+    console.log('[DSG Extension] Loading overlay shown');
+  }
+  
+  function hideLoadingOverlay() {
+    if (loadingOverlay) {
+      loadingOverlay.style.opacity = '0';
+      setTimeout(() => {
+        loadingOverlay?.remove();
+        document.getElementById('dsg-loading-styles')?.remove();
+        loadingOverlay = null;
+      }, 300);
+    }
   }
   
   function checkAndFillCredentials() {
     chrome.runtime.sendMessage({ action: 'GET_PENDING_LOGIN' }, (pending) => {
       if (chrome.runtime.lastError) {
         console.log('[DSG Extension] Error getting pending login:', chrome.runtime.lastError);
+        hideLoadingOverlay();
         return;
       }
       
       if (!pending) {
         console.log('[DSG Extension] No pending login for this page');
+        hideLoadingOverlay();
         return;
       }
       
@@ -36,6 +141,7 @@
       if (Date.now() - pending.timestamp > 5 * 60 * 1000) {
         console.log('[DSG Extension] Pending login expired');
         chrome.runtime.sendMessage({ action: 'CLEAR_PENDING_LOGIN' });
+        hideLoadingOverlay();
         return;
       }
       
@@ -53,7 +159,7 @@
     if (usernameInput && passwordInput) {
       console.log('[DSG Extension] Found login fields, filling...');
       
-      // IMPORTANT: Disable Chrome's password save prompt by modifying autocomplete attributes
+      // IMPORTANT: Disable Chrome's password save prompt
       disablePasswordSavePrompt(usernameInput, passwordInput);
       
       // Fill username
@@ -63,19 +169,56 @@
       setTimeout(() => {
         fillField(passwordInput, creds.password);
         
-        // Show success notification
-        showNotification('✅ Credentials filled by DSG Transport', 'success');
-        
-        // Clear pending login
+        // Clear pending login immediately
         chrome.runtime.sendMessage({ action: 'CLEAR_PENDING_LOGIN' });
         
-        // Report success
-        chrome.runtime.sendMessage({ 
-          action: 'LOGIN_SUCCESS', 
-          toolName: creds.toolName 
-        });
-        
-        console.log('[DSG Extension] Credentials filled successfully!');
+        // Auto-click login button after a brief delay
+        setTimeout(() => {
+          const loginButton = findLoginButton();
+          if (loginButton) {
+            console.log('[DSG Extension] Found login button, clicking...');
+            
+            // Click the login button
+            loginButton.click();
+            
+            // Also try form submit as backup
+            const form = usernameInput.closest('form') || passwordInput.closest('form');
+            if (form) {
+              // Some sites need form.submit() instead of button click
+              setTimeout(() => {
+                if (document.contains(loginButton)) {
+                  console.log('[DSG Extension] Trying form submit as backup...');
+                  try {
+                    form.submit();
+                  } catch (e) {
+                    console.log('[DSG Extension] Form submit failed, button click should work');
+                  }
+                }
+              }, 500);
+            }
+            
+            // Report success
+            chrome.runtime.sendMessage({ 
+              action: 'LOGIN_SUCCESS', 
+              toolName: creds.toolName 
+            });
+            
+            console.log('[DSG Extension] Auto-login initiated!');
+            
+            // Hide overlay after a short delay (let the page redirect)
+            setTimeout(hideLoadingOverlay, 1500);
+            
+          } else {
+            console.log('[DSG Extension] No login button found, credentials filled');
+            showNotification('✅ Credentials filled - Click login to continue', 'success');
+            hideLoadingOverlay();
+            
+            chrome.runtime.sendMessage({ 
+              action: 'LOGIN_SUCCESS', 
+              toolName: creds.toolName 
+            });
+          }
+        }, 300);
         
       }, 200);
       
@@ -84,6 +227,109 @@
       // Retry a few times with increasing delays
       retryFillCredentials(creds, 1);
     }
+  }
+  
+  // Find the login/submit button
+  function findLoginButton() {
+    const buttonSelectors = [
+      // Standard buttons
+      'button[type="submit"]',
+      'input[type="submit"]',
+      // Text-based matching
+      'button:contains("Sign In")',
+      'button:contains("Log In")',
+      'button:contains("Login")',
+      'button:contains("Submit")',
+      'button:contains("Continue")',
+      'button:contains("Next")',
+      // ID/Name based
+      'button[id*="login" i]',
+      'button[id*="signin" i]',
+      'button[id*="submit" i]',
+      'input[id*="login" i]',
+      'input[id*="submit" i]',
+      'button[name*="login" i]',
+      'button[name*="submit" i]',
+      // Class based
+      'button[class*="login" i]',
+      'button[class*="signin" i]',
+      'button[class*="submit" i]',
+      '.login-button',
+      '.signin-button',
+      '.submit-button',
+      '.btn-login',
+      '.btn-signin',
+      // ASP.NET specific
+      'input[name*="btnLogin" i]',
+      'input[name*="btnSubmit" i]',
+      'input[id*="btnLogin" i]',
+      // Generic form button
+      'form button:not([type="button"])',
+      'form input[type="image"]',
+      // Links styled as buttons
+      'a[class*="login" i]',
+      'a[class*="signin" i]',
+    ];
+    
+    // First try standard selectors
+    for (const selector of buttonSelectors) {
+      try {
+        // Skip :contains pseudo-selector (not standard CSS)
+        if (selector.includes(':contains')) continue;
+        
+        const elements = document.querySelectorAll(selector);
+        for (const el of elements) {
+          if (isVisible(el) && isLikelyLoginButton(el)) {
+            console.log('[DSG Extension] Found login button via selector:', selector);
+            return el;
+          }
+        }
+      } catch (e) {}
+    }
+    
+    // Try text-based search for buttons
+    const allButtons = document.querySelectorAll('button, input[type="submit"], input[type="button"], a.btn, a.button');
+    const loginKeywords = ['sign in', 'signin', 'log in', 'login', 'submit', 'continue', 'enter', 'next', 'go'];
+    
+    for (const btn of allButtons) {
+      if (!isVisible(btn)) continue;
+      
+      const text = (btn.textContent || btn.value || '').toLowerCase().trim();
+      const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+      
+      for (const keyword of loginKeywords) {
+        if (text.includes(keyword) || ariaLabel.includes(keyword)) {
+          console.log('[DSG Extension] Found login button via text match:', keyword);
+          return btn;
+        }
+      }
+    }
+    
+    // Last resort: find any submit button in a form with password field
+    const forms = document.querySelectorAll('form');
+    for (const form of forms) {
+      if (form.querySelector('input[type="password"]')) {
+        const submitBtn = form.querySelector('button, input[type="submit"]');
+        if (submitBtn && isVisible(submitBtn)) {
+          console.log('[DSG Extension] Found submit button in password form');
+          return submitBtn;
+        }
+      }
+    }
+    
+    return null;
+  }
+  
+  // Check if element looks like a login button
+  function isLikelyLoginButton(el) {
+    const text = (el.textContent || el.value || '').toLowerCase();
+    const skipKeywords = ['forgot', 'reset', 'register', 'signup', 'sign up', 'create', 'cancel', 'back'];
+    
+    for (const skip of skipKeywords) {
+      if (text.includes(skip)) return false;
+    }
+    
+    return true;
   }
   
   // Prevent Chrome from showing "Save Password?" prompt
