@@ -99,8 +99,8 @@ async def request_tool_access(
 @router.get("/launch/{access_token}")
 async def launch_tool(access_token: str):
     """
-    Launch tool - redirects to login page.
-    For auto-fill, use the browser extension.
+    Launch tool - For secure auto-login, the browser extension is REQUIRED.
+    Without extension, users cannot access credentials.
     """
     token_hash = hashlib.sha256(access_token.encode()).hexdigest()
     token_data = access_tokens.get(token_hash)
@@ -121,109 +121,59 @@ async def launch_tool(access_token: str):
     access_tokens[token_hash]["used"] = True
     
     login_url = token_data["login_url"]
-    credentials = token_data.get("credentials", {})
     tool_name = token_data["tool_name"]
+    has_credentials = token_data.get("has_credentials", False)
     
-    # No credentials - just redirect to tool URL
-    if not credentials or not credentials.get("username"):
-        return RedirectResponse(url=login_url, status_code=302)
-    
-    username = credentials.get("username", "")
-    password = credentials.get("password", "")
-    
-    # Create a helper page that opens the login URL and provides secure credential access
+    # Show extension required page - credentials are NEVER shown without extension
     html = f'''<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Opening {tool_name}...</title>
+<title>{tool_name} - DSG Transport</title>
 <style>
 *{{box-sizing:border-box}}
 body{{margin:0;padding:20px;font-family:system-ui,-apple-system,sans-serif;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}}
-.container{{max-width:400px;width:100%;background:rgba(255,255,255,0.05);border-radius:16px;padding:32px;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(10px)}}
+.container{{max-width:450px;width:100%;background:rgba(255,255,255,0.05);border-radius:16px;padding:32px;border:1px solid rgba(255,255,255,0.1);text-align:center}}
 .logo{{font-size:24px;font-weight:700;margin-bottom:8px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}}
-.subtitle{{color:#94a3b8;font-size:14px;margin-bottom:24px}}
-.tool-name{{font-size:18px;font-weight:600;color:#fff;margin-bottom:16px}}
-.field{{margin-bottom:16px}}
-.label{{font-size:12px;color:#64748b;margin-bottom:6px;display:flex;align-items:center;gap:8px}}
-.value{{background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px;font-family:monospace;font-size:14px;color:#e2e8f0;display:flex;align-items:center;justify-content:space-between}}
-.value span{{max-width:250px;overflow:hidden;text-overflow:ellipsis}}
-.btn{{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;transition:all 0.2s;border:none;width:100%}}
-.btn-primary{{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff}}
+.tool-name{{font-size:20px;font-weight:600;color:#fff;margin:20px 0}}
+.message{{color:#94a3b8;font-size:14px;line-height:1.6;margin-bottom:24px}}
+.btn{{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:14px 24px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;transition:all 0.2s;border:none;text-decoration:none}}
+.btn-primary{{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;width:100%;margin-bottom:12px}}
 .btn-primary:hover{{transform:translateY(-1px);box-shadow:0 4px 12px rgba(59,130,246,0.4)}}
-.btn-copy{{background:rgba(255,255,255,0.1);color:#fff;padding:8px 12px;font-size:12px;width:auto}}
-.btn-copy:hover{{background:rgba(255,255,255,0.2)}}
-.copied{{background:#22c55e!important}}
-.security-note{{font-size:11px;color:#64748b;text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1)}}
-.icon{{width:16px;height:16px}}
+.btn-secondary{{background:rgba(255,255,255,0.1);color:#fff;width:100%}}
+.btn-secondary:hover{{background:rgba(255,255,255,0.15)}}
+.extension-box{{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:12px;padding:20px;margin:20px 0}}
+.extension-box h3{{color:#22c55e;margin:0 0 8px 0;font-size:16px}}
+.extension-box p{{color:#94a3b8;margin:0;font-size:13px}}
+.warning{{background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);border-radius:8px;padding:12px;margin-top:16px;font-size:12px;color:#eab308}}
+.icon{{width:48px;height:48px;margin:0 auto 16px}}
 </style>
 </head>
 <body>
 <div class="container">
 <div class="logo">🔐 DSG Transport</div>
-<div class="subtitle">Secure Tool Access</div>
+
+<svg class="icon" fill="none" stroke="#3b82f6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
 
 <div class="tool-name">📱 {tool_name}</div>
 
-<div class="field">
-<div class="label">
-<svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-Username
-</div>
-<div class="value">
-<span id="user">{username}</span>
-<button class="btn btn-copy" onclick="copyText('user', this)">Copy</button>
-</div>
+<div class="message">
+{"This tool has <strong>secure credentials</strong> managed by DSG Transport." if has_credentials else "Opening " + tool_name + "..."}
 </div>
 
-<div class="field">
-<div class="label">
-<svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-Password
-</div>
-<div class="value">
-<span id="pass">••••••••</span>
-<button class="btn btn-copy" onclick="copyText('pass', this)" data-pass="{password}">Copy</button>
-</div>
-</div>
+{"<div class='extension-box'><h3>🧩 Browser Extension Required</h3><p>To auto-fill credentials securely, please install the DSG Transport browser extension from your dashboard.</p></div>" if has_credentials else ""}
 
-<button class="btn btn-primary" onclick="openTool()">
-<svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-Open {tool_name} Login Page
-</button>
+<a href="{login_url}" target="_blank" class="btn btn-primary">
+Open {tool_name} {"(Manual Login)" if has_credentials else ""}
+</a>
 
-<div class="security-note">
-🛡️ Credentials are managed by DSG Transport.<br>
-For auto-fill, install the browser extension.
+<a href="/" class="btn btn-secondary">
+← Return to Dashboard
+</a>
+
+{"<div class='warning'>⚠️ Without the extension, you cannot access credentials. Contact your Super Admin if you need help.</div>" if has_credentials else ""}
+
 </div>
-</div>
-
-<script>
-function copyText(id, btn) {{
-    var text = id === 'pass' ? btn.getAttribute('data-pass') : document.getElementById(id).innerText;
-    navigator.clipboard.writeText(text).then(function() {{
-        btn.classList.add('copied');
-        btn.innerText = '✓ Copied';
-        setTimeout(function() {{
-            btn.classList.remove('copied');
-            btn.innerText = 'Copy';
-        }}, 2000);
-    }});
-}}
-
-function openTool() {{
-    window.open('{login_url}', '_blank');
-}}
-
-// Auto-clear sensitive data after 5 minutes
-setTimeout(function() {{
-    document.getElementById('user').innerText = '[Expired]';
-    document.querySelectorAll('[data-pass]').forEach(function(el) {{
-        el.setAttribute('data-pass', '');
-        el.disabled = true;
-    }});
-}}, 300000);
-</script>
 </body>
 </html>'''
     
