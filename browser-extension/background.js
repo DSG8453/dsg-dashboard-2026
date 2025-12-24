@@ -78,14 +78,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // NEW: Handle secure login with encrypted payload
 async function handleSecureLogin(request, sendResponse) {
   try {
-    console.log('[DSG Extension] Starting SECURE login for:', request.toolName);
+    console.log('[DSG Extension] Starting SECURE auto-login for:', request.toolName);
     
-    // Get the decryption key from backend (one-time, tied to this session)
-    // The encrypted payload can only be decrypted server-side
+    // Get the decryption from backend
     const decryptResponse = await fetch(getBackendUrl() + '/api/secure-access/decrypt-payload', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Origin': chrome.runtime.getURL('') // Identify as extension
       },
       body: JSON.stringify({
         encrypted: request.encryptedPayload
@@ -110,6 +110,7 @@ async function handleSecureLogin(request, sendResponse) {
       usernameField: request.usernameField || decrypted.uf || 'username',
       passwordField: request.passwordField || decrypted.pf || 'password',
       toolName: request.toolName,
+      autoSubmit: true, // Enable auto-click login button
       timestamp: Date.now()
     };
     
@@ -122,18 +123,18 @@ async function handleSecureLogin(request, sendResponse) {
       active: true
     });
     
-    console.log('[DSG Extension] Opened secure tab:', tab.id);
+    console.log('[DSG Extension] Opened secure tab:', tab.id, 'Auto-login enabled');
     
-    // Clear credentials from memory after sending to content script
+    // Clear credentials from memory after they're used
     setTimeout(() => {
       loginData.username = null;
       loginData.password = null;
-    }, 10000);
+    }, 15000); // 15 seconds max
     
     sendResponse({ 
       success: true, 
       tabId: tab.id,
-      message: 'Login page opened, credentials will auto-fill securely'
+      message: 'Auto-login initiated - signing you in automatically'
     });
     
   } catch (error) {
