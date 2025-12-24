@@ -68,9 +68,9 @@ async def get_activity_logs(
     logs = []
     cursor = db.activity_logs.find(query_filter).sort("created_at", -1).limit(limit)
     
-    # Get user roles for display
+    # Get user roles for display (limit to 1000 users)
     all_users = {}
-    async for u in db.users.find({}, {"email": 1, "role": 1}):
+    async for u in db.users.find({}, {"email": 1, "role": 1}).limit(1000):
         all_users[u["email"]] = u.get("role", "Unknown")
     
     async for log in cursor:
