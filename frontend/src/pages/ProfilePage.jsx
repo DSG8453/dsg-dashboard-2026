@@ -211,14 +211,35 @@ export const ProfilePage = ({ currentUser }) => {
             You won't need to enter passwords - credentials are filled automatically and securely.
           </p>
 
-          {/* Download Button - Uses window.location.origin for same-origin download */}
+          {/* Download Button - Downloads without blank page */}
           <Button
             variant="outline"
             className="w-full gap-2"
-            onClick={() => {
-              // Get the current origin (e.g., https://safelogin-1.preview.emergentagent.com)
-              const downloadUrl = `${window.location.origin}/dsg-transport-extension.zip`;
-              window.open(downloadUrl, '_blank');
+            onClick={async () => {
+              try {
+                toast.info("Downloading extension...");
+                
+                // Fetch from same origin
+                const response = await fetch('/dsg-transport-extension.zip');
+                const blob = await response.blob();
+                
+                // Create download link
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'dsg-transport-extension.zip';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                toast.success("Download complete!", {
+                  description: "Extract the ZIP and install in Chrome",
+                });
+              } catch (err) {
+                // Fallback to window.open
+                window.open(`${window.location.origin}/dsg-transport-extension.zip`, '_blank');
+              }
             }}
           >
             <Download className="h-4 w-4" />
