@@ -68,8 +68,20 @@ export const ProfilePage = ({ currentUser }) => {
   };
 
   const handleDownloadExtension = () => {
-    // Direct redirect to download URL - most reliable method
-    window.location.href = `${process.env.REACT_APP_BACKEND_URL}/api/download/extension`;
+    // Use hidden iframe for download - doesn't navigate away from page
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = `${process.env.REACT_APP_BACKEND_URL}/api/download/extension`;
+    document.body.appendChild(iframe);
+    
+    // Remove iframe after download starts
+    setTimeout(() => {
+      document.body.removeChild(iframe);
+    }, 5000);
+    
+    toast.success("Download Started!", {
+      description: "Check your downloads folder for dsg-transport-extension.zip",
+    });
   };
 
   const copyExtensionId = () => {
