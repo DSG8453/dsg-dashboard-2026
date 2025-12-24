@@ -354,7 +354,6 @@ export const UsersPage = () => {
       setNewUser({ 
         name: "", 
         email: "", 
-        password: "",
         role: "User", 
         status: "Active",
         access_level: "standard" 
