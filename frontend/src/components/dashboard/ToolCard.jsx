@@ -170,52 +170,65 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
       // Check if we got encrypted payload (new secure method)
       const hasEncrypted = !!response.encrypted;
       
-      // Send to extension
+      // Send to extension with timeout
       if (typeof chrome !== 'undefined' && chrome.runtime) {
-        chrome.runtime.sendMessage(
-          extensionId,
-          hasEncrypted ? {
-            // NEW SECURE METHOD - encrypted payload
-            action: 'DSG_SECURE_LOGIN',
-            encryptedPayload: response.encrypted,
-            loginUrl: response.loginUrl,
-            usernameField: response.usernameField,
-            passwordField: response.passwordField,
-            toolName: response.toolName
-          } : {
-            // FALLBACK for older extension versions
-            action: 'DSG_AUTO_LOGIN',
-            loginUrl: response.loginUrl || response.payload?.loginUrl,
-            username: response.payload?.username,
-            password: response.payload?.password,
-            usernameField: response.usernameField || response.payload?.usernameField,
-            passwordField: response.passwordField || response.payload?.passwordField,
-            toolName: response.toolName || response.payload?.toolName
-          },
-          (extResponse) => {
-            if (chrome.runtime.lastError) {
-              console.error('Extension error:', chrome.runtime.lastError);
-              // Fallback: use request-access flow
-              handleFallbackAccess();
-              return;
+        // Set timeout for extension response (3 seconds)
+        let timeoutId = setTimeout(() => {
+          console.log('Extension timeout - using fallback');
+          handleFallbackAccess();
+        }, 3000);
+        
+        try {
+          chrome.runtime.sendMessage(
+            extensionId,
+            hasEncrypted ? {
+              // NEW SECURE METHOD - encrypted payload
+              action: 'DSG_SECURE_LOGIN',
+              encryptedPayload: response.encrypted,
+              loginUrl: response.loginUrl,
+              usernameField: response.usernameField,
+              passwordField: response.passwordField,
+              toolName: response.toolName
+            } : {
+              // FALLBACK for older extension versions
+              action: 'DSG_AUTO_LOGIN',
+              loginUrl: response.loginUrl || response.payload?.loginUrl,
+              username: response.payload?.username,
+              password: response.payload?.password,
+              usernameField: response.usernameField || response.payload?.usernameField,
+              passwordField: response.passwordField || response.payload?.passwordField,
+              toolName: response.toolName || response.payload?.toolName
+            },
+            (extResponse) => {
+              clearTimeout(timeoutId); // Clear timeout since we got a response
+              
+              if (chrome.runtime.lastError) {
+                console.error('Extension error:', chrome.runtime.lastError);
+                // Fallback: use request-access flow
+                handleFallbackAccess();
+                return;
+              }
+              
+              if (extResponse && extResponse.success) {
+                toast.success(`Opening ${tool.name}`, {
+                  description: "Credentials will auto-fill on the login page",
+                  icon: <Shield className="h-4 w-4" />,
+                });
+                setIsAccessingTool(false);
+              } else {
+                // Extension responded but failed - try fallback
+                handleFallbackAccess();
+              }
             }
-            
-            if (extResponse && extResponse.success) {
-              toast.success(`Opening ${tool.name}`, {
-                description: "Credentials will auto-fill on the login page",
-                icon: <Shield className="h-4 w-4" />,
-              });
-            } else {
-              // Extension responded but failed - try fallback
-              handleFallbackAccess();
-            }
-            setIsAccessingTool(false);
-          }
-        );
+          );
+        } catch (extError) {
+          clearTimeout(timeoutId);
+          console.error('Extension send error:', extError);
+          handleFallbackAccess();
+        }
       } else {
-        // Chrome API not available - show extension dialog
-        setExtensionDialogOpen(true);
-        setIsAccessingTool(false);
+        // Chrome API not available - use fallback directly
+        handleFallbackAccess();
       }
       
     } catch (error) {
