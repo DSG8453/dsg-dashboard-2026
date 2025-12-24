@@ -33,7 +33,7 @@ async def get_tools(current_user: dict = Depends(get_current_user)):
     is_super_admin = current_user.get("role") == "Super Administrator"
     
     tools = []
-    async for tool in db.tools.find():
+    async for tool in db.tools.find().limit(200):
         tool_data = {
             "id": str(tool["_id"]),
             "name": tool["name"],
