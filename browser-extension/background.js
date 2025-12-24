@@ -8,21 +8,27 @@ let pendingLogins = {};
 // Listen for messages from DSG Transport dashboard (external)
 chrome.runtime.onMessageExternal.addListener(
   (request, sender, sendResponse) => {
-    console.log('[DSG Extension] External message received:', request.action);
+    console.log('[DSG Extension] ===== EXTERNAL MESSAGE RECEIVED =====');
+    console.log('[DSG Extension] Action:', request.action);
+    console.log('[DSG Extension] Sender:', sender.origin || sender.url);
+    console.log('[DSG Extension] Request keys:', Object.keys(request));
     
     // NEW: Secure login with encrypted payload
     if (request.action === 'DSG_SECURE_LOGIN') {
+      console.log('[DSG Extension] Processing DSG_SECURE_LOGIN...');
       handleSecureLogin(request, sendResponse);
       return true; // Keep channel open for async response
     }
     
     // Legacy support (will be removed)
     if (request.action === 'DSG_AUTO_LOGIN') {
+      console.log('[DSG Extension] Processing DSG_AUTO_LOGIN (legacy)...');
       handleAutoLogin(request, sendResponse);
       return true;
     }
     
     if (request.action === 'DSG_CHECK_EXTENSION') {
+      console.log('[DSG Extension] Responding to DSG_CHECK_EXTENSION');
       sendResponse({ 
         installed: true, 
         version: chrome.runtime.getManifest().version,
@@ -32,6 +38,7 @@ chrome.runtime.onMessageExternal.addListener(
       return true;
     }
     
+    console.log('[DSG Extension] Unknown action:', request.action);
     return false;
   }
 );
