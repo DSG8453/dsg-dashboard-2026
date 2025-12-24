@@ -866,7 +866,7 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
                 className="w-full"
                 onClick={() => {
                   setExtensionDialogOpen(false);
-                  handleDirectAccess();
+                  handleFallbackAccess();
                 }}
               >
                 Skip for now (manual login)
