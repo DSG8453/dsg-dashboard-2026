@@ -85,9 +85,9 @@ export const CredentialsPage = () => {
   useEffect(() => {
     if (user && !isSuperAdmin) {
       toast.error("Access denied. Super Admin only.");
-      navigate("/");
+      navigate("/", { replace: true });
     }
-  }, [user, isSuperAdmin, navigate]);
+  }, [user, isSuperAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch user credentials
   useEffect(() => {
