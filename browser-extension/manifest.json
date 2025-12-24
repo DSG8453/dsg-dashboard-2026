@@ -16,7 +16,7 @@
       "*://*.emergentagent.com/*",
       "*://*.dsgtransport.com/*",
       "http://localhost/*",
-      "https://secureaccess-15.preview.emergentagent.com/*"
+      "https://safelogin-1.preview.emergentagent.com/*"
     ]
   },
   "background": {

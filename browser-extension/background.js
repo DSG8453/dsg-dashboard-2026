@@ -189,7 +189,7 @@ async function handleAutoLogin(request, sendResponse) {
 // Get backend URL from storage or default
 function getBackendUrl() {
   // This should match the dashboard URL
-  return 'https://secureaccess-15.preview.emergentagent.com';
+  return 'https://safelogin-1.preview.emergentagent.com';
 }
 
 // Check if two URLs match (same domain)
