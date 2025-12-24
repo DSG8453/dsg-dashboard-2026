@@ -136,9 +136,9 @@ export const ActivityLogsPage = () => {
   useEffect(() => {
     if (user && user.role !== "Super Administrator") {
       toast.error("Access denied. Super Admin only.");
-      navigate("/");
+      navigate("/", { replace: true });
     }
-  }, [user, navigate]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch users with logs for filter
   const fetchUsersWithLogs = async () => {
