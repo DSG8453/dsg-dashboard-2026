@@ -440,10 +440,21 @@
   }
   
   function findUsernameField(preferredName) {
-    // Try specific field name first
+    console.log('[DSG Extension] Looking for username field with preferredName:', preferredName);
+    
+    // Try specific field name first (exact match)
     const selectors = [
       `input[name="${preferredName}"]`,
       `input[id="${preferredName}"]`,
+      // Handle ASP.NET encoded names ($ becomes _)
+      `input[name="${preferredName.replace(/\$/g, '_')}"]`,
+      `input[id="${preferredName.replace(/\$/g, '_')}"]`,
+      // Partial match for ASP.NET
+      `input[name*="txtUserName" i]`,
+      `input[name*="txtUser" i]`,
+      `input[name*="UserName" i]`,
+      `input[id*="txtUserName" i]`,
+      `input[id*="UserName" i]`,
       // Common username/email field patterns
       'input[name*="user" i]',
       'input[name*="email" i]',
@@ -458,12 +469,8 @@
       'input[placeholder*="email" i]',
       'input[placeholder*="user" i]',
       'input[placeholder*="login" i]',
-      // ASP.NET specific
-      'input[name*="txtUser" i]',
-      'input[id*="txtUser" i]',
-      'input[name*="UserName" i]',
-      'input[name*="LOGIN_ID" i]',
       'input[name="Email"]',
+      'input[name="LOGIN_ID"]',
       // Generic text input in login forms
       'form input[type="text"]:first-of-type'
     ];
@@ -472,19 +479,40 @@
       try {
         const input = document.querySelector(selector);
         if (input && isVisible(input)) {
-          console.log('[DSG Extension] Found username field:', selector);
+          console.log('[DSG Extension] Found username field with selector:', selector);
           return input;
         }
       } catch (e) {}
     }
     
+    // Last resort: find any visible text input
+    const allInputs = document.querySelectorAll('input[type="text"], input:not([type])');
+    for (const input of allInputs) {
+      if (isVisible(input) && !input.type.includes('hidden')) {
+        console.log('[DSG Extension] Found username field (fallback):', input.name || input.id);
+        return input;
+      }
+    }
+    
+    console.log('[DSG Extension] No username field found');
     return null;
   }
   
   function findPasswordField(preferredName) {
+    console.log('[DSG Extension] Looking for password field with preferredName:', preferredName);
+    
     const selectors = [
       `input[name="${preferredName}"]`,
       `input[id="${preferredName}"]`,
+      // Handle ASP.NET encoded names
+      `input[name="${preferredName.replace(/\$/g, '_')}"]`,
+      `input[id="${preferredName.replace(/\$/g, '_')}"]`,
+      // ASP.NET specific
+      `input[name*="txtPassword" i]`,
+      `input[name*="txtPass" i]`,
+      `input[id*="txtPassword" i]`,
+      `input[id*="Password" i]`,
+      // Standard password field
       'input[type="password"]',
       'input[name*="pass" i]',
       'input[name*="pwd" i]',
@@ -492,10 +520,6 @@
       'input[id*="pwd" i]',
       'input[autocomplete="current-password"]',
       'input[autocomplete="password"]',
-      // ASP.NET specific
-      'input[name*="txtPass" i]',
-      'input[id*="txtPass" i]',
-      'input[name*="Password" i]',
       'input[name="PASSWORD"]'
     ];
     
@@ -503,12 +527,13 @@
       try {
         const input = document.querySelector(selector);
         if (input && isVisible(input)) {
-          console.log('[DSG Extension] Found password field:', selector);
+          console.log('[DSG Extension] Found password field with selector:', selector);
           return input;
         }
       } catch (e) {}
     }
     
+    console.log('[DSG Extension] No password field found');
     return null;
   }
   
