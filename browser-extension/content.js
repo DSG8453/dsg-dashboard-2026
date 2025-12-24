@@ -19,23 +19,97 @@
   function initAutoFill() {
     console.log('[DSG Extension] Initializing auto-fill on:', window.location.href);
     
-    // Check immediately for pending login to show overlay ASAP
+    // Check for pending login and fill immediately if found
     chrome.runtime.sendMessage({ action: 'GET_PENDING_LOGIN' }, (pending) => {
       console.log('[DSG Extension] Got pending login response:', pending ? 'YES' : 'NO');
-      if (pending && !chrome.runtime.lastError) {
-        // Show loading overlay immediately
+      
+      if (chrome.runtime.lastError) {
+        console.log('[DSG Extension] Error:', chrome.runtime.lastError.message);
+        return;
+      }
+      
+      if (pending) {
+        // Show loading overlay
         showLoadingOverlay(pending.toolName);
+        
+        // Fill credentials directly with the data we have
+        console.log('[DSG Extension] Filling credentials immediately...');
+        fillCredentialsWithData(pending);
       }
     });
-    
-    // Try multiple times with increasing delays
-    const delays = [500, 1000, 1500, 2000, 3000];
-    delays.forEach((delay, index) => {
-      setTimeout(() => {
-        console.log(`[DSG Extension] Auto-fill attempt ${index + 1} at ${delay}ms`);
-        checkAndFillCredentials();
-      }, delay);
+  }
+  
+  // Fill credentials with provided data (doesn't fetch from storage again)
+  function fillCredentialsWithData(creds) {
+    console.log('[DSG Extension] fillCredentialsWithData called with:', {
+      toolName: creds.toolName,
+      url: creds.url,
+      usernameField: creds.usernameField,
+      passwordField: creds.passwordField,
+      hasUsername: !!creds.username,
+      hasPassword: !!creds.password
     });
+    
+    // Try multiple times with delays
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    const tryFill = () => {
+      attempts++;
+      console.log(`[DSG Extension] Fill attempt ${attempts}/${maxAttempts}`);
+      
+      const usernameInput = findUsernameField(creds.usernameField);
+      const passwordInput = findPasswordField(creds.passwordField);
+      
+      console.log('[DSG Extension] Found fields:', {
+        username: usernameInput ? (usernameInput.name || usernameInput.id || 'found') : 'NOT FOUND',
+        password: passwordInput ? (passwordInput.name || passwordInput.id || 'found') : 'NOT FOUND'
+      });
+      
+      if (usernameInput && passwordInput) {
+        console.log('[DSG Extension] Both fields found, filling...');
+        
+        // Disable password save prompt
+        disablePasswordSavePrompt(usernameInput, passwordInput);
+        
+        // Fill username
+        fillField(usernameInput, creds.username);
+        
+        // Fill password after short delay
+        setTimeout(() => {
+          fillField(passwordInput, creds.password);
+          console.log('[DSG Extension] Credentials filled!');
+          
+          // Auto-click login button
+          setTimeout(() => {
+            const loginButton = findLoginButton();
+            if (loginButton) {
+              console.log('[DSG Extension] Clicking login button...');
+              loginButton.click();
+              setTimeout(hideLoadingOverlay, 1500);
+            } else {
+              console.log('[DSG Extension] No login button found');
+              showNotification('✅ Credentials filled - Click login to continue', 'success');
+              hideLoadingOverlay();
+            }
+          }, 300);
+        }, 200);
+        
+        return; // Success!
+      }
+      
+      // Retry if not at max attempts
+      if (attempts < maxAttempts) {
+        setTimeout(tryFill, 500);
+      } else {
+        console.log('[DSG Extension] Max attempts reached, fields not found');
+        showNotification('⚠️ Could not find login fields. Please login manually.', 'warning');
+        hideLoadingOverlay();
+      }
+    };
+    
+    // Start trying after page settles
+    setTimeout(tryFill, 500);
   }
   
   function showLoadingOverlay(toolName) {
