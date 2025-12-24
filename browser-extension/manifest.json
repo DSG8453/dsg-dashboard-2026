@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DSG Transport Secure Login",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Secure auto-login for DSG Transport tools. Credentials are never visible to users.",
   "permissions": [
     "activeTab",
