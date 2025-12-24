@@ -67,18 +67,38 @@ export const ProfilePage = ({ currentUser }) => {
     toast.info("Extension ID Removed");
   };
 
-  const handleDownloadExtension = () => {
-    // Create a temporary anchor element for direct download
-    const link = document.createElement('a');
-    link.href = `${process.env.REACT_APP_BACKEND_URL}/api/download/extension`;
-    link.download = 'dsg-transport-extension.zip';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    toast.success("Downloading Extension", {
-      description: "Extract the ZIP and follow the installation steps below",
-    });
+  const handleDownloadExtension = async () => {
+    try {
+      toast.info("Preparing download...");
+      
+      // Fetch the file as blob to handle cross-origin download
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/download/extension`);
+      
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'dsg-transport-extension.zip';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up the blob URL
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Download Started!", {
+        description: "Extract the ZIP and follow the installation steps below",
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+      // Fallback: open in new tab
+      window.location.href = `${process.env.REACT_APP_BACKEND_URL}/api/download/extension`;
+    }
   };
 
   const copyExtensionId = () => {
