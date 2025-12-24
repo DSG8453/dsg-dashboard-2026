@@ -284,6 +284,11 @@ export const Navbar = ({ currentUser }) => {
                           >
                             <item.icon className="h-5 w-5" />
                             {item.name}
+                            {item.name === "Devices" && pendingDevicesCount > 0 && (
+                              <Badge variant="warning" className="ml-auto bg-yellow-500 text-black">
+                                {pendingDevicesCount}
+                              </Badge>
+                            )}
                           </Button>
                         )}
                       </NavLink>
