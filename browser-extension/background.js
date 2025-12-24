@@ -193,20 +193,42 @@ function getBackendUrl() {
   return 'https://safelogin-1.preview.emergentagent.com';
 }
 
-// Check if two URLs match (same domain)
+// Check if two URLs match (same domain or URL contains pending URL domain)
 function isUrlMatch(pendingUrl, currentUrl) {
-  if (!pendingUrl || !currentUrl) return false;
+  if (!pendingUrl || !currentUrl) {
+    console.log('[DSG Extension] URL match failed - missing URL', { pendingUrl, currentUrl });
+    return false;
+  }
   
   try {
     const pending = new URL(pendingUrl);
     const current = new URL(currentUrl);
     
-    // Check if same hostname or subdomain
+    // Exact hostname match
+    if (pending.hostname === current.hostname) {
+      console.log('[DSG Extension] URL match - exact hostname');
+      return true;
+    }
+    
+    // Check if same domain (ignoring subdomain)
     const pendingDomain = pending.hostname.split('.').slice(-2).join('.');
     const currentDomain = current.hostname.split('.').slice(-2).join('.');
     
-    return pendingDomain === currentDomain;
-  } catch {
+    if (pendingDomain === currentDomain) {
+      console.log('[DSG Extension] URL match - same domain');
+      return true;
+    }
+    
+    // Check if current URL hostname contains pending domain
+    if (current.hostname.includes(pending.hostname) || pending.hostname.includes(current.hostname)) {
+      console.log('[DSG Extension] URL match - partial hostname');
+      return true;
+    }
+    
+    console.log('[DSG Extension] URL match failed', { pendingDomain, currentDomain });
+    return false;
+  } catch (e) {
+    console.log('[DSG Extension] URL match error:', e);
     return false;
   }
 }
