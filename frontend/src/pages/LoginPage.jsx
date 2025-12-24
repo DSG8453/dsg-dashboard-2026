@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/context/AuthContext";
+import { authAPI } from "@/services/api";
 import { toast } from "sonner";
-import { Loader2, Lock, Mail, Shield, ArrowLeft, KeyRound, RefreshCw } from "lucide-react";
+import { Loader2, Lock, Mail, Shield, ArrowLeft, KeyRound, RefreshCw, CheckCircle } from "lucide-react";
 
 export const LoginPage = () => {
   const [email, setEmail] = useState("");
@@ -20,6 +21,11 @@ export const LoginPage = () => {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [resendCooldown, setResendCooldown] = useState(0);
   const otpRefs = [useRef(), useRef(), useRef(), useRef(), useRef(), useRef()];
+  
+  // Forgot Password state
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [resetEmailSent, setResetEmailSent] = useState(false);
   
   const { login, verifyOtp, resendOtp } = useAuth();
   const navigate = useNavigate();
