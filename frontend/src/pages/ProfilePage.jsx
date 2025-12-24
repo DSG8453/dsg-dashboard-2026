@@ -68,19 +68,17 @@ export const ProfilePage = ({ currentUser }) => {
   };
 
   const handleDownloadExtension = () => {
-    // Use hidden iframe for download - doesn't navigate away from page
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = `${process.env.REACT_APP_BACKEND_URL}/api/download/extension`;
-    document.body.appendChild(iframe);
+    // Open in new window - forces browser to handle the download
+    const downloadUrl = `${process.env.REACT_APP_BACKEND_URL}/api/download/extension`;
+    const newWindow = window.open(downloadUrl, '_blank', 'noopener,noreferrer');
     
-    // Remove iframe after download starts
-    setTimeout(() => {
-      document.body.removeChild(iframe);
-    }, 5000);
+    // If popup was blocked, try direct navigation
+    if (!newWindow) {
+      window.location.assign(downloadUrl);
+    }
     
-    toast.success("Download Started!", {
-      description: "Check your downloads folder for dsg-transport-extension.zip",
+    toast.info("Download starting...", {
+      description: "If download doesn't start, check your popup blocker",
     });
   };
 
