@@ -6,6 +6,15 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { authAPI } from "@/services/api";
 import { toast } from "sonner";
 import {
   User,
@@ -20,11 +29,23 @@ import {
   Check,
   Copy,
   ExternalLink,
+  Loader2,
+  Eye,
+  EyeOff,
+  Lock,
 } from "lucide-react";
 
 export const ProfilePage = ({ currentUser }) => {
   const [extensionId, setExtensionId] = useState("");
   const [isExtensionSaved, setIsExtensionSaved] = useState(false);
+  
+  // Change Password Dialog state
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // Load saved extension ID on mount
   useEffect(() => {
@@ -42,9 +63,40 @@ export const ProfilePage = ({ currentUser }) => {
   };
 
   const handleChangePassword = () => {
-    toast.info("Change Password", {
-      description: "Password change functionality - coming soon!",
-    });
+    setShowChangePassword(true);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+  };
+
+  const handleSubmitPasswordChange = async () => {
+    // Validation
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      toast.error("New password must be at least 6 characters");
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match");
+      return;
+    }
+    
+    setIsChangingPassword(true);
+    
+    try {
+      await authAPI.changePassword(currentPassword, newPassword);
+      toast.success("Password changed successfully!");
+      setShowChangePassword(false);
+    } catch (error) {
+      toast.error(error.message || "Failed to change password");
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const handleSaveExtensionId = () => {
