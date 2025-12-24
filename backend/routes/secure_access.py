@@ -4,6 +4,7 @@ Credentials are NEVER shown to users - login happens automatically via browser e
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
+from pydantic import BaseModel
 from database import get_db
 from routes.auth import get_current_user
 from bson import ObjectId
