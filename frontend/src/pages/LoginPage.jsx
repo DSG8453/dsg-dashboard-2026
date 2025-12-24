@@ -26,12 +26,13 @@ export const LoginPage = () => {
       <div className="w-full max-w-sm">
         {/* Card */}
         <div className="bg-white shadow-xl rounded-3xl p-8 text-center">
-          {/* Logo - Slightly smaller */}
-          <div className="mb-8">
+          {/* Logo - Only truck, text cropped */}
+          <div className="mb-8 overflow-hidden" style={{ height: '60px' }}>
             <img
               src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/691ee53ded166d6334e8b9c6/0583cf617_315logodsg_.png"
               alt="DSG Transport LLC"
               className="h-20 w-auto mx-auto"
+              style={{ marginTop: '-5px' }}
             />
           </div>
 
