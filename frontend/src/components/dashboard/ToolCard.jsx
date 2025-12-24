@@ -210,9 +210,10 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
               }
               
               if (extResponse && extResponse.success) {
-                toast.success(`Opening ${tool.name}`, {
-                  description: "Credentials will auto-fill on the login page",
+                toast.success(`Signing into ${tool.name}`, {
+                  description: "Auto-login in progress - you'll be signed in automatically",
                   icon: <Shield className="h-4 w-4" />,
+                  duration: 4000,
                 });
                 setIsAccessingTool(false);
               } else {
