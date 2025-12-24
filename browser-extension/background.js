@@ -13,6 +13,16 @@ chrome.runtime.onMessageExternal.addListener(
     console.log('[DSG Extension] Sender:', sender.origin || sender.url);
     console.log('[DSG Extension] Request keys:', Object.keys(request));
     
+    // Dynamically capture the backend URL from the sender's origin
+    if (sender.origin) {
+      setBackendUrl(sender.origin);
+    } else if (sender.url) {
+      try {
+        const url = new URL(sender.url);
+        setBackendUrl(url.origin);
+      } catch (e) {}
+    }
+    
     // NEW: Secure login with encrypted payload
     if (request.action === 'DSG_SECURE_LOGIN') {
       console.log('[DSG Extension] Processing DSG_SECURE_LOGIN...');
