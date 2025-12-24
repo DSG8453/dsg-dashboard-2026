@@ -216,7 +216,20 @@ export const ProfilePage = ({ currentUser }) => {
             variant="outline"
             className="w-full gap-2"
             onClick={() => {
-              window.open(`${process.env.REACT_APP_BACKEND_URL}/api/download/extension`, '_blank');
+              const downloadUrl = `${process.env.REACT_APP_BACKEND_URL}/api/download/extension`;
+              
+              // Create hidden link and click it
+              const link = document.createElement('a');
+              link.href = downloadUrl;
+              link.target = '_blank';
+              link.rel = 'noopener noreferrer';
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              
+              toast.success("Download Started!", {
+                description: "Check your browser's download bar or Downloads folder",
+              });
             }}
           >
             <Download className="h-4 w-4" />
