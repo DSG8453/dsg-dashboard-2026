@@ -163,33 +163,40 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
       // Get ENCRYPTED credentials payload from backend
       const response = await toolsAPI.getExtensionPayload(tool.id);
       
-      if (!response.success || !response.encrypted) {
+      if (!response.success) {
         throw new Error('Failed to get secure access');
       }
       
-      // Send ENCRYPTED payload to extension - credentials NEVER visible to frontend
+      // Check if we got encrypted payload (new secure method)
+      const hasEncrypted = !!response.encrypted;
+      
+      // Send to extension
       if (typeof chrome !== 'undefined' && chrome.runtime) {
         chrome.runtime.sendMessage(
           extensionId,
-          {
+          hasEncrypted ? {
+            // NEW SECURE METHOD - encrypted payload
             action: 'DSG_SECURE_LOGIN',
             encryptedPayload: response.encrypted,
             loginUrl: response.loginUrl,
             usernameField: response.usernameField,
             passwordField: response.passwordField,
             toolName: response.toolName
+          } : {
+            // FALLBACK for older extension versions
+            action: 'DSG_AUTO_LOGIN',
+            loginUrl: response.loginUrl || response.payload?.loginUrl,
+            username: response.payload?.username,
+            password: response.payload?.password,
+            usernameField: response.usernameField || response.payload?.usernameField,
+            passwordField: response.passwordField || response.payload?.passwordField,
+            toolName: response.toolName || response.payload?.toolName
           },
           (extResponse) => {
             if (chrome.runtime.lastError) {
               console.error('Extension error:', chrome.runtime.lastError);
-              toast.error("Extension not responding", {
-                description: "Please make sure the DSG Transport extension is installed and enabled.",
-                action: {
-                  label: "Install",
-                  onClick: () => setExtensionDialogOpen(true)
-                }
-              });
-              setIsAccessingTool(false);
+              // Fallback: use request-access flow
+              handleFallbackAccess();
               return;
             }
             
@@ -198,6 +205,9 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
                 description: "Credentials will auto-fill on the login page",
                 icon: <Shield className="h-4 w-4" />,
               });
+            } else {
+              // Extension responded but failed - try fallback
+              handleFallbackAccess();
             }
             setIsAccessingTool(false);
           }
@@ -210,11 +220,42 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
       
     } catch (error) {
       console.error("Failed to access tool:", error);
+      // Try fallback access method
+      handleFallbackAccess();
+    }
+  };
+  
+  // Fallback access using request-access endpoint (opens in new tab with auto-submit form)
+  const handleFallbackAccess = async () => {
+    try {
+      const response = await toolsAPI.requestSecureAccess(tool.id);
+      
+      if (response.access_url) {
+        // Open the secure access URL (handles auto-login via form submission)
+        const fullUrl = `${process.env.REACT_APP_BACKEND_URL}${response.access_url}`;
+        window.open(fullUrl, "_blank", "noopener,noreferrer");
+        
+        toast.success(`Opening ${tool.name}`, {
+          description: response.has_auto_login 
+            ? "Auto-login in progress..." 
+            : "Please login manually",
+          icon: <Shield className="h-4 w-4" />,
+        });
+      } else if (response.login_url) {
+        window.open(response.login_url, "_blank", "noopener,noreferrer");
+        toast.info(`${tool.name} opened`, {
+          description: "Please login manually",
+        });
+      }
+    } catch (error) {
+      console.error("Fallback access failed:", error);
       toast.error("Failed to access tool", {
-        description: error.message || "Please contact Super Admin for assistance",
+        description: error.message || "Please contact Super Admin",
       });
+    } finally {
       setIsAccessingTool(false);
     }
+  };
   };
 
   // Fallback: Open tool directly (for non-extension users or when extension fails)
