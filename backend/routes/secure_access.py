@@ -318,3 +318,125 @@ async def cleanup_expired_tokens(current_user: dict = Depends(get_current_user))
         del access_tokens[token_hash]
     
     return {"message": f"Cleaned up {len(expired)} expired tokens"}
+
+
+# ============ SERVER-SIDE DIRECT LOGIN (BITWARDEN-STYLE) ============
+from services.tool_login_service import server_login_to_tool, get_cached_session, cache_session
+
+@router.post("/{tool_id}/direct-login")
+async def direct_tool_login(
+    tool_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    BITWARDEN-STYLE: Server logs into tool and returns authenticated session.
+    User never sees login page - tool opens already logged in.
+    
+    Returns:
+        - cookies: List of session cookies to set in browser
+        - final_url: URL to open (post-login destination)
+    """
+    db = await get_db()
+    
+    try:
+        obj_id = ObjectId(tool_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid tool ID")
+    
+    tool = await db.tools.find_one({"_id": obj_id})
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
+    
+    # Check if user has access to this tool
+    if current_user.get("role") != "Super Administrator":
+        user_data = await db.users.find_one({"_id": ObjectId(current_user["id"])})
+        allowed_tools = user_data.get("allowed_tools", []) if user_data else []
+        if tool_id not in allowed_tools:
+            raise HTTPException(status_code=403, detail="You don't have access to this tool")
+    
+    credentials = tool.get("credentials", {})
+    login_url = credentials.get("login_url") or tool.get("url")
+    
+    if not login_url:
+        raise HTTPException(status_code=400, detail="Tool URL not configured")
+    
+    username = credentials.get("username", "")
+    password = credentials.get("password", "")
+    
+    if not username or not password:
+        # No credentials - just return the URL for manual access
+        return {
+            "success": True,
+            "has_credentials": False,
+            "direct_url": tool.get("url"),
+            "tool_name": tool.get("name"),
+            "message": "No credentials configured - opening tool directly"
+        }
+    
+    # Check for cached session
+    cached = get_cached_session(current_user["id"], tool_id)
+    if cached:
+        # Log access
+        await db.activity_logs.insert_one({
+            "user_email": current_user["email"],
+            "user_name": current_user.get("name", current_user["email"]),
+            "action": "Direct Tool Access (Cached)",
+            "target": tool.get("name"),
+            "details": f"Used cached session for {tool.get('name')}",
+            "activity_type": "access",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        return {
+            "success": True,
+            "has_credentials": True,
+            "cookies": cached["cookies"],
+            "direct_url": cached["final_url"],
+            "tool_name": tool.get("name"),
+            "cached": True
+        }
+    
+    # Perform server-side login
+    result = await server_login_to_tool(
+        login_url=login_url,
+        username=username,
+        password=password,
+        username_field=credentials.get("username_field", "username"),
+        password_field=credentials.get("password_field", "password"),
+        tool_name=tool.get("name")
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=500,
+            detail=result.get("error", "Failed to login to tool")
+        )
+    
+    # Cache the session for reuse
+    cache_session(
+        current_user["id"],
+        tool_id,
+        result["cookies"],
+        result["final_url"]
+    )
+    
+    # Log access
+    await db.activity_logs.insert_one({
+        "user_email": current_user["email"],
+        "user_name": current_user.get("name", current_user["email"]),
+        "action": "Direct Tool Access",
+        "target": tool.get("name"),
+        "details": f"Server-side login to {tool.get('name')} successful",
+        "activity_type": "access",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {
+        "success": True,
+        "has_credentials": True,
+        "cookies": result["cookies"],
+        "direct_url": result["final_url"],
+        "tool_name": tool.get("name"),
+        "cached": False
+    }
+
