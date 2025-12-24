@@ -73,7 +73,7 @@ async def create_user(
     send_email: bool = Query(False, description="Send invitation email to user"),
     current_user: dict = Depends(require_admin)
 ):
-    """Create a new user (admin only)"""
+    """Create a new user (admin only) - Google SSO only, no passwords"""
     db = await get_db()
     
     # Check if email already exists
@@ -84,23 +84,19 @@ async def create_user(
             detail="Email already registered"
         )
     
-    # Store plain password for email before hashing
-    plain_password = user_data.password
-    
-    # Create user
+    # Create user - NO PASSWORD (Google SSO only)
     initials = "".join([n[0].upper() for n in user_data.name.split()[:2]])
     now = datetime.now(timezone.utc).isoformat()
     new_user = {
         "email": user_data.email.lower(),
-        "password": hash_password(user_data.password),
-        "plain_password": plain_password,  # Store for Super Admin viewing
         "name": user_data.name,
         "role": user_data.role.value,
         "status": user_data.status.value,
         "access_level": user_data.access_level.value,
         "initials": initials,
         "created_at": now,
-        "last_active": "Never"
+        "last_active": "Never",
+        "auth_method": "google_sso"  # Track that this user uses Google SSO
     }
     
     result = await db.users.insert_one(new_user)
@@ -109,11 +105,10 @@ async def create_user(
     # Send invitation email if requested
     email_sent = False
     if send_email:
-        email_sent = send_invitation_email(
+        email_sent = send_sso_invitation_email(
             to_email=user_data.email.lower(),
             user_name=user_data.name,
-            password=plain_password,
-            login_url=FRONTEND_URL
+            portal_url=FRONTEND_URL or "https://portal.dsgtransport.net"
         )
     
     return {
