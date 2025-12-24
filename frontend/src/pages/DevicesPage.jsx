@@ -180,6 +180,51 @@ export const DevicesPage = () => {
     }
   };
 
+  // Quick action handlers for table buttons
+  const handleQuickApprove = async (device) => {
+    try {
+      await devicesAPI.approve(device.id);
+      setDevices(devices.map((d) =>
+        d.id === device.id ? { ...d, status: "approved" } : d
+      ));
+      toast.success(`Device approved for ${device.user_name}`);
+    } catch (error) {
+      toast.error("Failed to approve device");
+    }
+  };
+
+  const handleQuickBlock = async (device) => {
+    try {
+      if (device.status === "pending") {
+        await devicesAPI.reject(device.id);
+        setDevices(devices.map((d) =>
+          d.id === device.id ? { ...d, status: "rejected" } : d
+        ));
+        toast.warning(`Device rejected for ${device.user_name}`);
+      } else {
+        await devicesAPI.revoke(device.id);
+        setDevices(devices.map((d) =>
+          d.id === device.id ? { ...d, status: "revoked" } : d
+        ));
+        toast.warning(`Device blocked for ${device.user_name}`);
+      }
+    } catch (error) {
+      toast.error("Failed to block device");
+    }
+  };
+
+  const handleQuickReactivate = async (device) => {
+    try {
+      await devicesAPI.approve(device.id);
+      setDevices(devices.map((d) =>
+        d.id === device.id ? { ...d, status: "approved" } : d
+      ));
+      toast.success(`Device reactivated for ${device.user_name}`);
+    } catch (error) {
+      toast.error("Failed to reactivate device");
+    }
+  };
+
   const pendingDevices = devices.filter((d) => d.status === "pending");
   const approvedDevices = devices.filter((d) => d.status === "approved");
   const otherDevices = devices.filter((d) => !["pending", "approved"].includes(d.status));
