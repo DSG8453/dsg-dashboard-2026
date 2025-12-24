@@ -7,7 +7,7 @@ A full-stack management portal for DSG Transport LLC with:
 - JWT authentication with 2-Step Verification (2SV)
 - Encrypted credential storage
 - Complex role-based access control (Super Admin > Admin > User)
-- **Browser Extension for Secure Auto-Login** (NEW)
+- **Browser Extension for Secure Auto-Login with Auto-Submit** (ENHANCED)
 
 ## Test Credentials
 - **Super Admin:** info@dsgtransport.net / admin123 (2SV currently disabled for testing)
@@ -19,17 +19,25 @@ Use REACT_APP_BACKEND_URL from /app/frontend/.env with /api prefix
 
 ## Features to Test
 
-### PRIORITY: Browser Extension Secure Auto-Login (NEW)
-- [x] Backend: POST /api/secure-access/{tool_id}/extension-payload returns credentials payload
-- [x] Frontend: "Open Tool" button shows extension installation dialog when extension not detected
-- [x] Frontend: Extension installation dialog shows clear step-by-step instructions
-- [x] Frontend: "Skip for now" option opens tool URL for manual login
-- [ ] Extension: Install unpacked extension in Chrome
-- [ ] Extension: Copy Extension ID from chrome://extensions/
-- [ ] Extension: Enter Extension ID in dashboard dialog
-- [ ] Extension: Click "Open Tool" - should open login page in new tab
-- [ ] Extension: Credentials auto-fill on RMIS login page
-- [ ] Extension: Green notification shows "Credentials filled by DSG Transport"
+### PRIORITY 1: Security Enhancements (NEW)
+- [ ] Backend: /api/secure-access/decrypt-payload has rate limiting (10 req/min)
+- [ ] Backend: /api/secure-access/decrypt-payload blocks requests from non-extension origins
+- [ ] Backend: Admin/User CANNOT see credentials in GET /api/tools response
+- [ ] Backend: Super Admin CAN see credentials in GET /api/tools response
+
+### PRIORITY 2: Enhanced Auto-Login Extension
+- [ ] Extension: Auto-fills credentials on tool login page
+- [ ] Extension: Auto-clicks login button after filling credentials
+- [ ] Extension: Shows loading overlay while signing in
+- [ ] Extension: Hides overlay after successful login
+- [ ] Frontend: Toast shows "Auto-login in progress" message
+
+### PRIORITY 3: Credential Visibility Test
+- [ ] API Test: Login as Admin, fetch tools, verify NO credentials field
+- [ ] API Test: Login as User, fetch tools, verify NO credentials field  
+- [ ] API Test: Login as Super Admin, fetch tools, verify credentials present
+- [ ] UI Test: Admin dashboard shows "Open Tool" but no Edit button
+- [ ] UI Test: Super Admin dashboard shows Edit button with credentials form
 
 ### 1. Activity Log - Super Admin Only
 - [x] Backend: GET /api/activity-logs returns 403 for Admin (verified via curl)
@@ -91,17 +99,21 @@ Use REACT_APP_BACKEND_URL from /app/frontend/.env with /api prefix
 
 ## Incorporate User Feedback
 - Activity Log should be visible to Super Admin ONLY (implemented)
+- Credentials must NEVER be visible to Admin/User (implemented)
+- Auto-login should auto-click login button (implemented)
 
 ## Last Test Result
-- Change Role Feature - VERIFIED:
-  1. Added missing handleChangeRole function in UsersPage.jsx
-  2. Tested via API: Successfully changed Test Admin from Administrator to User and back
-  3. Tested via UI: Role dropdown works, shows "Admin" and "User" options, updates immediately
+- Security Enhancement - IMPLEMENTED:
+  1. Added rate limiting to /api/secure-access/decrypt-payload (10 req/min)
+  2. Added origin validation - blocks requests from non-extension origins
+  3. Verified Admin/User cannot see credentials in API responses
+  4. Verified Super Admin CAN see credentials
   
-- Devices Page Error - FIXED:
-  1. Error: canManageDevices is not defined
-  2. Fix: Added `const canManageDevices = isSuperAdmin;` definition
-  3. Devices page now loads correctly for Super Admin
+- Enhanced Auto-Login Extension - IMPLEMENTED:
+  1. Extension now auto-clicks login button after filling credentials
+  2. Loading overlay shows "Signing you into [tool]..." during process
+  3. Overlay hides after successful login redirect
+  4. Toast message updated to "Auto-login in progress"
   
 - Users Created:
   1. info@dsgtransport.net (Super Administrator) - Super Admin
