@@ -211,27 +211,20 @@ export const ProfilePage = ({ currentUser }) => {
             You won't need to enter passwords - credentials are filled automatically and securely.
           </p>
 
-          {/* Download Button - Full URL that works */}
-          <a
-            href="https://safelogin-1.preview.emergentagent.com/dsg-transport-extension.zip"
-            download="dsg-transport-extension.zip"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full block"
+          {/* Download Button - Uses window.location.origin for same-origin download */}
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            onClick={() => {
+              // Get the current origin (e.g., https://safelogin-1.preview.emergentagent.com)
+              const downloadUrl = `${window.location.origin}/dsg-transport-extension.zip`;
+              window.open(downloadUrl, '_blank');
+            }}
           >
-            <Button
-              variant="outline"
-              className="w-full gap-2"
-              type="button"
-              asChild
-            >
-              <span>
-                <Download className="h-4 w-4" />
-                Download Extension
-                <ExternalLink className="h-3 w-3 ml-1" />
-              </span>
-            </Button>
-          </a>
+            <Download className="h-4 w-4" />
+            Download Extension
+            <ExternalLink className="h-3 w-3 ml-1" />
+          </Button>
 
           <Separator />
 
