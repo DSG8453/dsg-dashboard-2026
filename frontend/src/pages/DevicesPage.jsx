@@ -440,8 +440,8 @@ export const DevicesPage = () => {
   );
 };
 
-// Device Table Component
-const DeviceTable = ({ devices, onManage, showUser = true }) => {
+// Device Table Component with Sr No, User Email, IP, Status, Actions
+const DeviceTable = ({ devices, onManage, onApprove, onBlock, onReactivate, showUser = true }) => {
   if (devices.length === 0) {
     return (
       <Card className="border-2 border-border/50">
@@ -462,67 +462,120 @@ const DeviceTable = ({ devices, onManage, showUser = true }) => {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
-              {showUser && <TableHead className="font-semibold">User</TableHead>}
-              <TableHead className="font-semibold">Device</TableHead>
-              <TableHead className="font-semibold hidden md:table-cell">IP Address</TableHead>
-              <TableHead className="font-semibold hidden lg:table-cell">Last Login</TableHead>
+              <TableHead className="font-semibold w-16">Sr No</TableHead>
+              <TableHead className="font-semibold">User Email</TableHead>
+              <TableHead className="font-semibold">Device / Browser</TableHead>
+              <TableHead className="font-semibold">IP Address</TableHead>
               <TableHead className="font-semibold">Status</TableHead>
-              {onManage && <TableHead className="font-semibold text-right">Actions</TableHead>}
+              <TableHead className="font-semibold text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {devices.map((device) => {
+            {devices.map((device, index) => {
               const Icon = getDeviceIcon(device.device_name);
+              const isPending = device.status === "pending";
+              const isApproved = device.status === "approved";
+              const isBlocked = device.status === "rejected" || device.status === "revoked";
+              
               return (
                 <TableRow key={device.id} className="hover:bg-muted/30">
-                  {showUser && (
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{device.user_name}</p>
-                        <p className="text-sm text-muted-foreground">{device.user_email}</p>
-                      </div>
-                    </TableCell>
-                  )}
+                  <TableCell className="font-medium text-muted-foreground">
+                    {index + 1}
+                  </TableCell>
+                  <TableCell>
+                    <div>
+                      <p className="font-medium">{device.user_email}</p>
+                      <p className="text-xs text-muted-foreground">{device.user_name}</p>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-lg bg-muted">
-                        <Icon className="h-5 w-5" />
+                      <div className="p-1.5 rounded-lg bg-muted">
+                        <Icon className="h-4 w-4" />
                       </div>
                       <div>
-                        <p className="font-medium">{device.device_name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {device.browser} / {device.os}
-                        </p>
+                        <p className="text-sm">{device.browser}</p>
+                        <p className="text-xs text-muted-foreground">{device.os}</p>
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <Globe className="h-3 w-3" />
-                      {device.ip_address}
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Globe className="h-3 w-3 text-muted-foreground" />
+                      <span className="font-mono text-sm">{device.ip_address}</span>
                     </div>
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell text-muted-foreground">
-                    {formatDate(device.last_login)}
                   </TableCell>
                   <TableCell>
                     <Badge variant={getStatusBadge(device.status)}>
-                      {device.status?.charAt(0).toUpperCase() + device.status?.slice(1)}
+                      {device.status?.toUpperCase()}
                     </Badge>
                   </TableCell>
-                  {onManage && (
-                    <TableCell className="text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        onClick={() => onManage(device)}
-                      >
-                        <Settings className="h-4 w-4" />
-                        <span className="hidden sm:inline">Manage</span>
-                      </Button>
-                    </TableCell>
-                  )}
+                  <TableCell>
+                    <div className="flex items-center justify-center gap-1">
+                      {/* Pending: Show Approve / Reject */}
+                      {isPending && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-success hover:text-success hover:bg-success/10"
+                            onClick={() => onApprove && onApprove(device)}
+                            title="Approve"
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => onBlock && onBlock(device)}
+                            title="Reject"
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
+                      
+                      {/* Approved: Show Block/Suspend */}
+                      {isApproved && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-warning hover:text-warning hover:bg-warning/10"
+                          onClick={() => onBlock && onBlock(device)}
+                          title="Block/Suspend"
+                        >
+                          <Shield className="h-4 w-4" />
+                        </Button>
+                      )}
+                      
+                      {/* Blocked/Rejected: Show Reactivate */}
+                      {isBlocked && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-success hover:text-success hover:bg-success/10"
+                          onClick={() => onReactivate && onReactivate(device)}
+                          title="Reactivate"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                        </Button>
+                      )}
+                      
+                      {/* Always show Manage button */}
+                      {onManage && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2"
+                          onClick={() => onManage(device)}
+                          title="More Options"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
                 </TableRow>
               );
             })}
