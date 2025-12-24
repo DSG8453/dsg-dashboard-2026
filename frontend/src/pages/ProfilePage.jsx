@@ -211,16 +211,18 @@ export const ProfilePage = ({ currentUser }) => {
             You won't need to enter passwords - credentials are filled automatically and securely.
           </p>
 
-          {/* Download Button - Direct anchor link */}
-          <a
-            href={`${process.env.REACT_APP_BACKEND_URL}/api/download/extension`}
-            download="dsg-transport-extension.zip"
-            className="inline-flex items-center justify-center w-full gap-2 px-4 py-2 text-sm font-medium rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+          {/* Download Button - Opens new window and downloads */}
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            onClick={() => {
+              window.open(`${process.env.REACT_APP_BACKEND_URL}/api/download/extension`, '_blank');
+            }}
           >
             <Download className="h-4 w-4" />
             Download Extension
             <ExternalLink className="h-3 w-3 ml-1" />
-          </a>
+          </Button>
 
           <Separator />
 
