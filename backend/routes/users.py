@@ -423,8 +423,14 @@ async def get_tool_access(user_id: str, current_user: dict = Depends(get_current
     """Get user's allowed tools"""
     db = await get_db()
     
-    # Users can only view their own access unless admin
-    if current_user["role"] != "Administrator" and current_user["id"] != user_id:
+    # Super Admin can access anyone's tool access
+    # Admin can access anyone's tool access  
+    # Regular users can only view their own access
+    is_super_admin = current_user["role"] == "Super Administrator"
+    is_admin = current_user["role"] == "Administrator"
+    is_own_access = current_user["id"] == user_id
+    
+    if not (is_super_admin or is_admin or is_own_access):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized"
@@ -445,6 +451,7 @@ async def get_tool_access(user_id: str, current_user: dict = Depends(get_current
     return {
         "user_id": user_id,
         "allowed_tools": user.get("allowed_tools", [])
+    }
     }
 
 
