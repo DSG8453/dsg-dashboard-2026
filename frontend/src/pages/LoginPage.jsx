@@ -4,14 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
+import { authAPI } from "@/services/api";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, Shield } from "lucide-react";
+import { Loader2, ArrowLeft, Shield, Mail, Lock, CheckCircle } from "lucide-react";
 
 export const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [email, setEmail] = useState("info@dsgtransport.net");
+  const [showPasswordLogin, setShowPasswordLogin] = useState(false);
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [emailChecked, setEmailChecked] = useState(false);
+  const [passwordLoginAllowed, setPasswordLoginAllowed] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -45,7 +48,42 @@ export const LoginPage = () => {
     }
   };
 
-  const handleAdminLogin = async (e) => {
+  const handleCheckEmail = async (e) => {
+    e.preventDefault();
+    
+    if (!email) {
+      toast.error("Please enter your email");
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      const response = await authAPI.checkPasswordAccess(email);
+      
+      if (response.password_login_enabled) {
+        setPasswordLoginAllowed(true);
+        setEmailChecked(true);
+        toast.success("Password login available", {
+          description: "Please enter your password to continue.",
+        });
+      } else {
+        setPasswordLoginAllowed(false);
+        setEmailChecked(true);
+        toast.info("Please use Google SSO", {
+          description: "Password login is not enabled for this account.",
+        });
+      }
+    } catch (error) {
+      toast.error("Error checking email", {
+        description: "Please try again or use Google SSO.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePasswordLogin = async (e) => {
     e.preventDefault();
     
     if (!password) {
@@ -66,7 +104,7 @@ export const LoginPage = () => {
           // Handle OTP flow if needed
         } else {
           toast.success("Welcome back!", {
-            description: "Super Admin login successful",
+            description: "Login successful",
           });
           navigate("/", { replace: true });
         }
@@ -84,10 +122,16 @@ export const LoginPage = () => {
     }
   };
 
+  const resetEmailCheck = () => {
+    setEmailChecked(false);
+    setPasswordLoginAllowed(false);
+    setPassword("");
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[#f0f4f8]">
       <div className="w-full max-w-md text-center">
-        {/* Logo with text - outside card */}
+        {/* Logo */}
         <div className="mb-8">
           <img
             src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/691ee53ded166d6334e8b9c6/0583cf617_315logodsg_.png"
@@ -98,10 +142,9 @@ export const LoginPage = () => {
 
         {/* Card */}
         <div className="bg-white shadow-lg rounded-2xl p-6">
-          {!showAdminLogin ? (
-            // Default View - Google SSO
+          {!showPasswordLogin ? (
+            // Default View - Google SSO Only
             <>
-              {/* Google Button - Light blue */}
               <Button
                 variant="outline"
                 className="w-full h-12 gap-3 text-base font-medium rounded-lg bg-[#bae6fd] hover:bg-[#7dd3fc] text-gray-700 border border-gray-200"
@@ -126,79 +169,168 @@ export const LoginPage = () => {
                 )}
               </Button>
 
-              {/* Super Admin Link */}
+              {/* Password Login Link */}
               <button
                 type="button"
-                onClick={() => setShowAdminLogin(true)}
+                onClick={() => setShowPasswordLogin(true)}
                 className="mt-4 text-sm text-gray-500 hover:text-gray-700 transition-colors flex items-center justify-center gap-1 mx-auto"
               >
-                <Shield className="h-3 w-3" />
-                Super Admin? Click here
+                <Lock className="h-3 w-3" />
+                Login with Email & Password
               </button>
             </>
           ) : (
-            // Super Admin Login View
-            <form onSubmit={handleAdminLogin} className="space-y-4">
+            // Password Login Flow
+            <>
               <div className="flex items-center gap-2 mb-4 pb-3 border-b">
                 <Shield className="h-5 w-5 text-blue-600" />
-                <span className="font-semibold text-gray-700">Super Admin Login</span>
+                <span className="font-semibold text-gray-700">Login with Password</span>
               </div>
 
-              <div className="text-left space-y-2">
-                <Label htmlFor="email" className="text-gray-600">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  disabled
-                  className="bg-gray-100"
-                />
-              </div>
+              {!emailChecked ? (
+                // Step 1: Enter Email
+                <form onSubmit={handleCheckEmail} className="space-y-4">
+                  <div className="text-left space-y-2">
+                    <Label htmlFor="email" className="text-gray-600">Email Address</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="Enter your email"
+                        className="pl-10"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
 
-              <div className="text-left space-y-2">
-                <Label htmlFor="password" className="text-gray-600">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  autoFocus
-                />
-              </div>
+                  <Button
+                    type="submit"
+                    className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Checking...
+                      </>
+                    ) : (
+                      "Check Access"
+                    )}
+                  </Button>
 
-              <Button
-                type="submit"
-                className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Signing in...
-                  </>
-                ) : (
-                  "Sign In"
-                )}
-              </Button>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Password login is only available if enabled by your administrator.
+                  </p>
+                </form>
+              ) : passwordLoginAllowed ? (
+                // Step 2b: Password Login Allowed - Show Password Field
+                <form onSubmit={handlePasswordLogin} className="space-y-4">
+                  <div className="text-left space-y-2">
+                    <Label className="text-gray-600">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        type="email"
+                        value={email}
+                        disabled
+                        className="pl-10 bg-gray-50"
+                      />
+                      <CheckCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
+                    </div>
+                  </div>
 
+                  <div className="text-left space-y-2">
+                    <Label htmlFor="password" className="text-gray-600">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Enter your password"
+                        className="pl-10"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Signing in...
+                      </>
+                    ) : (
+                      "Sign In"
+                    )}
+                  </Button>
+
+                  <button
+                    type="button"
+                    onClick={resetEmailCheck}
+                    className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                  >
+                    Use different email
+                  </button>
+                </form>
+              ) : (
+                // Step 2a: Password Login NOT Allowed
+                <div className="space-y-4">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <p className="text-sm text-yellow-800">
+                      <strong>Password login is not enabled</strong> for this account.
+                    </p>
+                    <p className="text-sm text-yellow-700 mt-1">
+                      Please use Google SSO to login, or contact your administrator to enable password login.
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={() => {
+                      setShowPasswordLogin(false);
+                      resetEmailCheck();
+                    }}
+                    className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Use Google SSO Instead
+                  </Button>
+
+                  <button
+                    type="button"
+                    onClick={resetEmailCheck}
+                    className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                  >
+                    Try different email
+                  </button>
+                </div>
+              )}
+
+              {/* Back to Google SSO */}
               <button
                 type="button"
                 onClick={() => {
-                  setShowAdminLogin(false);
-                  setPassword("");
+                  setShowPasswordLogin(false);
+                  resetEmailCheck();
                 }}
-                className="mt-2 text-sm text-gray-500 hover:text-gray-700 transition-colors flex items-center justify-center gap-1 mx-auto"
+                className="mt-4 text-sm text-gray-500 hover:text-gray-700 transition-colors flex items-center justify-center gap-1 mx-auto"
               >
                 <ArrowLeft className="h-3 w-3" />
                 Back to Google Sign In
               </button>
-            </form>
+            </>
           )}
         </div>
 
-        {/* Copyright - outside card */}
-        <p className="text-xs text-gray-500 mt-6">
+        {/* Copyright */}
+        <p className="text-xs text-gray-500 mt-6 font-semibold">
           © 2025 DSG Transport LLC. All rights reserved.
         </p>
       </div>
