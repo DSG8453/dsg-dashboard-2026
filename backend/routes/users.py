@@ -452,7 +452,6 @@ async def get_tool_access(user_id: str, current_user: dict = Depends(get_current
         "user_id": user_id,
         "allowed_tools": user.get("allowed_tools", [])
     }
-    }
 
 
 # Helper to check if current user can manage target user
