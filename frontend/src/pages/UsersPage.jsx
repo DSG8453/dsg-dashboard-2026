@@ -1019,7 +1019,6 @@ export const UsersPage = () => {
       <Dialog open={credentialsDialogOpen} onOpenChange={(open) => {
         setCredentialsDialogOpen(open);
         if (!open) {
-          setShowPassword(false);
           setCopied(false);
         }
       }}>
