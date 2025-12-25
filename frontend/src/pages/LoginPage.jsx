@@ -6,13 +6,29 @@ import { Loader2 } from "lucide-react";
 export const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
 
+  // Check if we're inside an iframe (Emergent preview panel)
+  const isInIframe = () => {
+    try {
+      return window.self !== window.top;
+    } catch (e) {
+      return true;
+    }
+  };
+
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     
     try {
       const redirectUrl = window.location.origin + '/';
       const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
-      window.location.replace(authUrl);
+      
+      // If in iframe (Emergent preview), redirect the parent/top window
+      // This keeps the flow in the same browser context instead of opening new window
+      if (isInIframe()) {
+        window.top.location.href = authUrl;
+      } else {
+        window.location.replace(authUrl);
+      }
     } catch (error) {
       setIsLoading(false);
       toast.error("Login failed", {
