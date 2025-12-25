@@ -79,7 +79,6 @@ function AppRoutes() {
     <Routes>
       {/* Public Routes */}
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/login-demo" element={<LoginDemo />} />
 
       {/* Protected Routes */}
       <Route
