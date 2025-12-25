@@ -142,6 +142,17 @@ export const usersAPI = {
   toggle2SV: (id, enabled) =>
     fetchAPI(`/api/users/${id}/toggle-2sv?enabled=${enabled}`, { method: 'PUT' }),
   
+  // Toggle password login access for user
+  togglePasswordLogin: (id, enabled) =>
+    fetchAPI(`/api/users/${id}/toggle-password-login?enabled=${enabled}`, { method: 'PUT' }),
+  
+  // Set password for user (when enabling password login)
+  setUserPassword: (id, password) =>
+    fetchAPI(`/api/users/${id}/set-password`, {
+      method: 'PUT',
+      body: JSON.stringify({ password }),
+    }),
+  
   changeRole: (id, newRole) =>
     fetchAPI(`/api/users/${id}/change-role?new_role=${encodeURIComponent(newRole)}`, { method: 'PUT' }),
   
