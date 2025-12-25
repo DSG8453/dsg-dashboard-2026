@@ -76,6 +76,7 @@ export const CredentialsPage = () => {
   // Dialog states
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [passwordLoginDialogOpen, setPasswordLoginDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [newPassword, setNewPassword] = useState("");
   const [isSaving, setIsSaving] = useState(false);
