@@ -250,11 +250,8 @@ export const DashboardPage = ({ currentUser }) => {
         try {
           const accessData = await usersAPI.getToolAccess(user.id);
           const allowedToolIds = accessData.allowed_tools || [];
-          if (allowedToolIds.length > 0) {
-            toolsWithIcons = toolsWithIcons.filter(tool => allowedToolIds.includes(tool.id));
-          } else {
-            toolsWithIcons = [];
-          }
+          // Always filter - even if 0 tools assigned
+          toolsWithIcons = toolsWithIcons.filter(tool => allowedToolIds.includes(tool.id));
         } catch {
           toolsWithIcons = [];
         }
