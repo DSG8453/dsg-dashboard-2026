@@ -1,0 +1,165 @@
+import { Card, CardContent } from "@/components/ui/card";
+import { Shield, Lock, Database, Mail, FileText, Users } from "lucide-react";
+
+export const PrivacyPolicyPage = () => {
+  const lastUpdated = "December 25, 2024";
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-12 px-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-10">
+          <div className="flex justify-center mb-4">
+            <img
+              src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/691ee53ded166d6334e8b9c6/0583cf617_315logodsg_.png"
+              alt="DSG Transport LLC"
+              className="h-16 w-auto"
+            />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
+          <p className="text-gray-600">DSG Transport Secure Login Extension</p>
+          <p className="text-sm text-gray-500 mt-2">Last Updated: {lastUpdated}</p>
+        </div>
+
+        {/* Content */}
+        <Card className="shadow-lg">
+          <CardContent className="p-8 space-y-8">
+            {/* Introduction */}
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <Shield className="h-5 w-5 text-blue-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Introduction</h2>
+              </div>
+              <p className="text-gray-700 leading-relaxed">
+                DSG Transport LLC ("we," "our," or "us") is committed to protecting your privacy. 
+                This Privacy Policy explains how the DSG Transport Secure Login browser extension 
+                ("Extension") collects, uses, and safeguards your information when you use our Extension.
+              </p>
+            </section>
+
+            {/* Information We Collect */}
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <Database className="h-5 w-5 text-blue-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Information We Collect</h2>
+              </div>
+              <p className="text-gray-700 mb-3">The Extension collects the following information:</p>
+              <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
+                <li><strong>Device Information:</strong> Browser type, device fingerprint, and IP address for device authentication and security purposes.</li>
+                <li><strong>Authentication Data:</strong> Login credentials (username/email and password) that are securely stored and used solely for automated login to authorized business tools.</li>
+                <li><strong>Usage Data:</strong> Information about which tools are accessed and when, for audit and security logging purposes.</li>
+              </ul>
+            </section>
+
+            {/* How We Use Your Information */}
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <FileText className="h-5 w-5 text-blue-600" />
+                <h2 className="text-xl font-semibold text-gray-900">How We Use Your Information</h2>
+              </div>
+              <p className="text-gray-700 mb-3">We use the collected information for the following purposes:</p>
+              <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
+                <li>To provide secure, automated login functionality to authorized business applications</li>
+                <li>To authenticate and verify authorized devices</li>
+                <li>To maintain security and prevent unauthorized access</li>
+                <li>To generate activity logs for compliance and auditing purposes</li>
+                <li>To improve the Extension's functionality and user experience</li>
+              </ul>
+            </section>
+
+            {/* Data Storage and Security */}
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <Lock className="h-5 w-5 text-blue-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Data Storage and Security</h2>
+              </div>
+              <p className="text-gray-700 mb-3">We take data security seriously:</p>
+              <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
+                <li>All credentials are encrypted using industry-standard encryption methods</li>
+                <li>Data is stored on secure servers with restricted access</li>
+                <li>We implement role-based access controls to limit data access</li>
+                <li>Regular security audits are conducted to ensure data protection</li>
+                <li>Credentials are never exposed in plain text to users (zero-visibility security)</li>
+              </ul>
+            </section>
+
+            {/* Data Sharing */}
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <Users className="h-5 w-5 text-blue-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Data Sharing</h2>
+              </div>
+              <p className="text-gray-700 leading-relaxed">
+                We do not sell, trade, or otherwise transfer your personal information to third parties. 
+                Your data is only shared with the specific business tools you are authorized to access, 
+                solely for the purpose of automated authentication. We may disclose information if 
+                required by law or to protect our rights and the security of our systems.
+              </p>
+            </section>
+
+            {/* Your Rights */}
+            <section>
+              <h2 className="text-xl font-semibold text-gray-900 mb-3">Your Rights</h2>
+              <p className="text-gray-700 mb-3">You have the following rights regarding your data:</p>
+              <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
+                <li><strong>Access:</strong> Request a copy of the personal data we hold about you</li>
+                <li><strong>Correction:</strong> Request correction of any inaccurate data</li>
+                <li><strong>Deletion:</strong> Request deletion of your personal data (subject to legal retention requirements)</li>
+                <li><strong>Objection:</strong> Object to the processing of your personal data</li>
+              </ul>
+              <p className="text-gray-700 mt-3">
+                To exercise any of these rights, please contact your administrator or reach out to us directly.
+              </p>
+            </section>
+
+            {/* Cookies and Tracking */}
+            <section>
+              <h2 className="text-xl font-semibold text-gray-900 mb-3">Cookies and Tracking</h2>
+              <p className="text-gray-700 leading-relaxed">
+                The Extension uses local storage to maintain your session and preferences. 
+                We do not use third-party tracking cookies or analytics within the Extension. 
+                Any data stored locally is encrypted and used solely for the Extension's functionality.
+              </p>
+            </section>
+
+            {/* Changes to This Policy */}
+            <section>
+              <h2 className="text-xl font-semibold text-gray-900 mb-3">Changes to This Privacy Policy</h2>
+              <p className="text-gray-700 leading-relaxed">
+                We may update this Privacy Policy from time to time. Any changes will be posted on this page 
+                with an updated "Last Updated" date. We encourage you to review this Privacy Policy periodically 
+                for any changes. Your continued use of the Extension after any modifications indicates your 
+                acceptance of the updated Privacy Policy.
+              </p>
+            </section>
+
+            {/* Contact Information */}
+            <section className="bg-blue-50 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Mail className="h-5 w-5 text-blue-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Contact Us</h2>
+              </div>
+              <p className="text-gray-700 mb-4">
+                If you have any questions or concerns about this Privacy Policy or our data practices, 
+                please contact us:
+              </p>
+              <div className="space-y-2 text-gray-700">
+                <p><strong>DSG Transport LLC</strong></p>
+                <p>Email: <a href="mailto:info@dsgtransport.net" className="text-blue-600 hover:underline">info@dsgtransport.net</a></p>
+                <p>Website: <a href="https://portal.dsgtransport.net" className="text-blue-600 hover:underline">portal.dsgtransport.net</a></p>
+              </div>
+            </section>
+
+            {/* Legal */}
+            <section className="border-t pt-6">
+              <p className="text-sm text-gray-500 text-center">
+                © 2025 DSG Transport LLC. All rights reserved.<br />
+                This privacy policy is effective as of {lastUpdated}.
+              </p>
+            </section>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
