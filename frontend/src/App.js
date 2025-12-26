@@ -12,6 +12,7 @@ import { AuthCallback } from "@/components/auth/AuthCallback";
 
 // Page Components
 import { LoginPage } from "@/pages/LoginPage";
+import { PrivacyPolicyPage } from "@/pages/PrivacyPolicyPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { UsersPage } from "@/pages/UsersPage";
