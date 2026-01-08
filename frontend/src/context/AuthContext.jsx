@@ -407,6 +407,7 @@ export const AuthProvider = ({ children }) => {
     dashboardRefreshKey,
     login,
     loginWithGoogle,
+    loginWithToken,
     verifyOtp,
     resendOtp,
     logout,
