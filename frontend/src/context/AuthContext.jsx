@@ -231,7 +231,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Google OAuth Login
+  // Google OAuth Login (Legacy - Emergent)
   const loginWithGoogle = async (sessionId) => {
     try {
       const response = await authAPI.googleSession(sessionId);
@@ -254,6 +254,37 @@ export const AuthProvider = ({ children }) => {
       };
     } catch (error) {
       return { success: false, error: error.message || "Google login failed" };
+    }
+  };
+
+  // Direct Token Login (New Google OAuth flow)
+  const loginWithToken = async (jwtToken) => {
+    try {
+      // Save token first
+      localStorage.setItem("dsg_token", jwtToken);
+      setToken(jwtToken);
+      
+      // Fetch user data with the token
+      const userData = await authAPI.getMe();
+      
+      // Save user data
+      localStorage.setItem("dsg_user", JSON.stringify(userData));
+      setUser(userData);
+      
+      // Register device after login
+      const deviceResult = await registerDevice(userData);
+      
+      return { 
+        success: true,
+        user: userData,
+        deviceApproved: deviceResult.approved,
+        deviceStatus: deviceResult.status 
+      };
+    } catch (error) {
+      // Clear token if getMe fails
+      localStorage.removeItem("dsg_token");
+      setToken(null);
+      return { success: false, error: error.message || "Token login failed" };
     }
   };
 
