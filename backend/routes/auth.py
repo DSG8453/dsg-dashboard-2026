@@ -439,6 +439,9 @@ async def google_callback(request: Request, code: str = None, error: str = None)
     
     # Get the host for redirect URI
     host = request.headers.get("host", "")
+    origin = request.headers.get("origin", "")
+    
+    # Determine environment
     if "preview" in host or "localhost" in host:
         redirect_uri = f"https://{host}/api/auth/google/callback"
         frontend_url = f"https://{host}"
@@ -446,13 +449,18 @@ async def google_callback(request: Request, code: str = None, error: str = None)
         redirect_uri = GOOGLE_REDIRECT_URI
         frontend_url = "https://portal.dsgtransport.net"
     
+    print(f"[Google OAuth] Callback received - host: {host}, redirect_uri: {redirect_uri}")
+    
     if error:
+        print(f"[Google OAuth] Error from Google: {error}")
         return RedirectResponse(url=f"{frontend_url}/login?error={error}")
     
     if not code:
+        print("[Google OAuth] No code received")
         return RedirectResponse(url=f"{frontend_url}/login?error=no_code")
     
     try:
+        print(f"[Google OAuth] Exchanging code for token...")
         # Exchange code for tokens
         async with httpx.AsyncClient() as client:
             token_response = await client.post(
@@ -466,8 +474,13 @@ async def google_callback(request: Request, code: str = None, error: str = None)
                 }
             )
             
+            print(f"[Google OAuth] Token response status: {token_response.status_code}")
+            
             if token_response.status_code != 200:
-                return RedirectResponse(url=f"{frontend_url}/login?error=token_exchange_failed")
+                error_data = token_response.json()
+                print(f"[Google OAuth] Token error: {error_data}")
+                error_msg = error_data.get("error_description", "token_exchange_failed")
+                return RedirectResponse(url=f"{frontend_url}/login?error={error_msg}")
             
             tokens = token_response.json()
             access_token = tokens.get("access_token")
