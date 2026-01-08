@@ -398,8 +398,139 @@ async def logout(current_user: dict = Depends(get_current_user)):
     return {"message": "Logged out successfully"}
 
 
-# ============ GOOGLE OAUTH INTEGRATION ============
-import httpx
+# ============ DIRECT GOOGLE OAUTH ============
+
+@router.get("/google/login")
+async def google_login(request: Request):
+    """
+    Initiate direct Google OAuth login.
+    Redirects user to Google's login page.
+    """
+    # Get the redirect URI from request or use default
+    redirect_uri = GOOGLE_REDIRECT_URI
+    
+    # For preview environment, use the preview URL
+    host = request.headers.get("host", "")
+    if "preview" in host or "localhost" in host:
+        redirect_uri = f"https://{host}/api/auth/google/callback"
+    
+    # Build Google OAuth URL
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "select_account"
+    }
+    
+    google_auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+    
+    return RedirectResponse(url=google_auth_url)
+
+
+@router.get("/google/callback")
+async def google_callback(request: Request, code: str = None, error: str = None):
+    """
+    Handle Google OAuth callback.
+    Exchanges code for tokens and creates user session.
+    """
+    db = await get_db()
+    
+    # Get the host for redirect URI
+    host = request.headers.get("host", "")
+    if "preview" in host or "localhost" in host:
+        redirect_uri = f"https://{host}/api/auth/google/callback"
+        frontend_url = f"https://{host}"
+    else:
+        redirect_uri = GOOGLE_REDIRECT_URI
+        frontend_url = "https://portal.dsgtransport.net"
+    
+    if error:
+        return RedirectResponse(url=f"{frontend_url}/login?error={error}")
+    
+    if not code:
+        return RedirectResponse(url=f"{frontend_url}/login?error=no_code")
+    
+    try:
+        # Exchange code for tokens
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "client_id": GOOGLE_CLIENT_ID,
+                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "code": code,
+                    "grant_type": "authorization_code",
+                    "redirect_uri": redirect_uri
+                }
+            )
+            
+            if token_response.status_code != 200:
+                return RedirectResponse(url=f"{frontend_url}/login?error=token_exchange_failed")
+            
+            tokens = token_response.json()
+            access_token = tokens.get("access_token")
+            
+            # Get user info from Google
+            userinfo_response = await client.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            
+            if userinfo_response.status_code != 200:
+                return RedirectResponse(url=f"{frontend_url}/login?error=userinfo_failed")
+            
+            google_user = userinfo_response.json()
+    
+    except Exception as e:
+        print(f"Google OAuth error: {e}")
+        return RedirectResponse(url=f"{frontend_url}/login?error=oauth_failed")
+    
+    # Extract Google user info
+    google_email = google_user.get("email", "").lower()
+    google_name = google_user.get("name", "")
+    google_picture = google_user.get("picture", "")
+    
+    if not google_email:
+        return RedirectResponse(url=f"{frontend_url}/login?error=no_email")
+    
+    # Find existing user by email
+    user = await db.users.find_one({"email": google_email})
+    
+    if not user:
+        return RedirectResponse(url=f"{frontend_url}/login?error=no_account&email={google_email}")
+    
+    # Check if user is suspended
+    if user.get("status") == "Suspended":
+        return RedirectResponse(url=f"{frontend_url}/login?error=suspended")
+    
+    # Update user's picture if provided
+    if google_picture and google_picture != user.get("picture"):
+        await db.users.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"picture": google_picture}}
+        )
+    
+    # Create JWT token
+    token_data = {
+        "sub": str(user["_id"]),
+        "email": user["email"],
+        "role": user["role"]
+    }
+    jwt_token = create_access_token(token_data)
+    
+    # Update last active
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"last_active": "Just now"}}
+    )
+    
+    # Redirect to frontend with token in URL hash (secure way)
+    return RedirectResponse(url=f"{frontend_url}/#token={jwt_token}")
+
+
+# ============ EMERGENT GOOGLE OAUTH (Legacy) ============
 
 class GoogleSessionRequest(BaseModel):
     session_id: str
@@ -408,6 +539,7 @@ class GoogleSessionRequest(BaseModel):
 async def google_oauth_session(request: GoogleSessionRequest):
     """
     Process Google OAuth session from Emergent Auth.
+    (Legacy - kept for backward compatibility)
     Verifies the Google email matches an existing user account.
     """
     db = await get_db()
