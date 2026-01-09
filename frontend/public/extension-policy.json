@@ -2,7 +2,7 @@
   "ExtensionSettings": {
     "dsg-transport-secure-login": {
       "installation_mode": "force_installed",
-      "update_url": "https://passkey-hub-2.preview.emergentagent.com/extension-update.xml"
+      "update_url": "https://keyvault-27.preview.emergentagent.com/extension-update.xml"
     }
   }
 }

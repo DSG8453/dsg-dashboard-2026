@@ -12,7 +12,7 @@ import asyncio
 from datetime import datetime
 
 # Get API URL from environment
-API_URL = os.environ.get("API_URL", "https://passkey-hub-2.preview.emergentagent.com")
+API_URL = os.environ.get("API_URL", "https://keyvault-27.preview.emergentagent.com")
 
 # Test credentials
 SUPER_ADMIN = {"email": "info@dsgtransport.net", "password": "admin123"}

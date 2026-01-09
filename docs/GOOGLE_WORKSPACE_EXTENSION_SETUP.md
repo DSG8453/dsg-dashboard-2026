@@ -34,7 +34,7 @@ This guide explains how to deploy the DSG Transport Secure Login extension to al
    - **Extension ID**: Leave blank for now (we'll configure via policy)
    - **Installation URL**: 
      ```
-     https://passkey-hub-2.preview.emergentagent.com/extension-update.xml
+     https://keyvault-27.preview.emergentagent.com/extension-update.xml
      ```
 3. Click **Save**
 
@@ -48,7 +48,7 @@ This guide explains how to deploy the DSG Transport Secure Login extension to al
    ```json
    {
      "installation_mode": "force_installed",
-     "update_url": "https://passkey-hub-2.preview.emergentagent.com/extension-update.xml"
+     "update_url": "https://keyvault-27.preview.emergentagent.com/extension-update.xml"
    }
    ```
 
@@ -113,9 +113,9 @@ This means the extension is not force-installed. Check:
 
 | File | URL |
 |------|-----|
-| Extension ZIP | `https://passkey-hub-2.preview.emergentagent.com/dsg-transport-extension.zip` |
-| Update Manifest | `https://passkey-hub-2.preview.emergentagent.com/extension-update.xml` |
-| Policy JSON | `https://passkey-hub-2.preview.emergentagent.com/extension-policy.json` |
+| Extension ZIP | `https://keyvault-27.preview.emergentagent.com/dsg-transport-extension.zip` |
+| Update Manifest | `https://keyvault-27.preview.emergentagent.com/extension-update.xml` |
+| Policy JSON | `https://keyvault-27.preview.emergentagent.com/extension-policy.json` |
 
 ---
 
