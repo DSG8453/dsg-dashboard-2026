@@ -18,17 +18,8 @@ router = APIRouter()
 security = HTTPBearer()
 
 # Google OAuth settings
-
-# Get Google OAuth secrets from Secret Manager
-try:
-    from services.secret_manager_service import SecretManagerService
-    secret_manager = SecretManagerService()
-    GOOGLE_CLIENT_ID = secret_manager.get_secret("google-client-id") or os.getenv("GOOGLE_CLIENT_ID")
-    GOOGLE_CLIENT_SECRET = secret_manager.get_secret("google-client-secret") or os.getenv("GOOGLE_CLIENT_SECRET")
-except Exception as e:
-    print(f"Warning: Could not load Google OAuth secrets: {e}")
-    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-    GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "https://portal.dsgtransport.net/api/auth/google/callback")
 
 class OTPRequest(BaseModel):

@@ -4,14 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Get MongoDB URL from Secret Manager
-try:
-    from services.secret_manager_service import SecretManagerService
-    secret_manager = SecretManagerService()
-    MONGO_URL = secret_manager.get_secret("mongo-uri") or os.getenv("MONGO_URL", "mongodb://localhost:27017")
-except Exception as e:
-    print(f"Warning: Could not load secret from Secret Manager: {e}")
-    MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = os.getenv("DB_NAME", "dsg_transport")
 
 client: AsyncIOMotorClient = None
