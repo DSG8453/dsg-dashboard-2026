@@ -45,6 +45,7 @@ export const LoginPage = () => {
   // Handle OAuth callback token in URL hash
   useEffect(() => {
     const hash = window.location.hash;
+    console.log("URL Hash:", hash);
     if (hash && hash.includes("token=")) {
       const token = hash.split("token=")[1].split("&")[0];
       if (token) {
