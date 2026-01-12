@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,31 @@ export const LoginPage = () => {
       });
     }
   };
+
+  // Handle OAuth callback token in URL hash
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.includes("token=")) {
+      const token = hash.split("token=")[1].split("&")[0];
+      if (token) {
+        localStorage.setItem("token", token);
+        try {
+          const payload = JSON.parse(atob(token.split(".")[1]));
+          const userInfo = {
+            id: payload.sub,
+            email: payload.email,
+            role: payload.role
+          };
+          localStorage.setItem("user", JSON.stringify(userInfo));
+          window.location.replace("/");
+        } catch (e) {
+          console.error("Token decode error:", e);
+          window.location.hash = "";
+        }
+      }
+    }
+  }, []);
+
 
   const handleCheckEmail = async (e) => {
     e.preventDefault();
