@@ -135,14 +135,14 @@ export const SupportProvider = ({ children }) => {
   };
 
   // Refresh issues
-  const refreshIssues = async () => {
+  const refreshIssues = useCallback(async () => {
     try {
       const issuesData = await issuesAPI.getAll();
       setIssues(issuesData);
     } catch (error) {
       console.error("Failed to refresh issues:", error);
     }
-  };
+  }, []);
 
   const value = {
     settings,

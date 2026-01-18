@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -141,17 +141,17 @@ export const ActivityLogsPage = () => {
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch users with logs for filter
-  const fetchUsersWithLogs = async () => {
+  const fetchUsersWithLogs = useCallback(async () => {
     try {
       const users = await activityLogsAPI.getUsersWithLogs();
       setUsersWithLogs(users);
     } catch (error) {
       console.error("Failed to fetch users:", error);
     }
-  };
+  }, []);
 
   // Fetch activity logs
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     setIsLoading(true);
     try {
       const userEmail = filterUser !== "all" ? filterUser : null;
@@ -164,15 +164,15 @@ export const ActivityLogsPage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filterRole, filterType, filterUser]);
 
   useEffect(() => {
     fetchUsersWithLogs();
-  }, []);
+  }, [fetchUsersWithLogs]);
 
   useEffect(() => {
     fetchLogs();
-  }, [filterType, filterRole, filterUser]);
+  }, [fetchLogs]);
 
   const filteredLogs = activityLogs.filter((log) => {
     const matchesSearch =

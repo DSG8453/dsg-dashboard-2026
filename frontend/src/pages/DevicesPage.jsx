@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -94,7 +94,7 @@ export const DevicesPage = () => {
   }, [user, isSuperAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch devices
-  const fetchDevices = async () => {
+  const fetchDevices = useCallback(async () => {
     if (!isSuperAdmin) return;
     try {
       const data = await devicesAPI.getAll();
@@ -105,13 +105,11 @@ export const DevicesPage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isSuperAdmin]);
 
   useEffect(() => {
-    if (isSuperAdmin) {
-      fetchDevices();
-    }
-  }, [isSuperAdmin]);
+    fetchDevices();
+  }, [fetchDevices]);
 
   const handleManageDevice = (device) => {
     setSelectedDevice(device);

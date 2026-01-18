@@ -86,7 +86,7 @@ export const IssuesPage = () => {
     if (user) {
       refreshIssues();
     }
-  }, [user]);
+  }, [refreshIssues, user]);
 
   // Super Admin sees all, others see only their own (filtered by backend)
   const displayIssues = issues;

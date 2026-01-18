@@ -15,7 +15,6 @@ export const AuthProvider = ({ children }) => {
   const [wsConnected, setWsConnected] = useState(false);
   const wsRef = useRef(null);
   const pingIntervalRef = useRef(null);
-  const reconnectTimeoutRef = useRef(null);
   
   // Logout function - defined early so it can be used in WebSocket handler
   const logout = useCallback(() => {
@@ -111,9 +110,6 @@ export const AuthProvider = ({ children }) => {
     connectWebSocket();
     
     return () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
       if (pingIntervalRef.current) {
         clearInterval(pingIntervalRef.current);
       }
