@@ -166,7 +166,7 @@ export const PrivacyPolicyPage = () => {
             {/* Legal */}
             <section className="border-t pt-6">
               <p className="text-sm text-gray-500 text-center">
-                © 2025 DSG Transport LLC. All rights reserved.<br />
+                © {new Date().getFullYear()} DSG Transport LLC. All rights reserved.<br />
                 This privacy policy is effective as of {lastUpdated}.
               </p>
             </section>
