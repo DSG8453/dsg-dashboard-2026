@@ -348,11 +348,10 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
       const response = await toolsAPI.directLogin(tool.id);
       
       if (response.success) {
-        // Check if user has extension installed
-        const extensionId = localStorage.getItem('dsg_extension_id');
-        
-        if (extensionId && typeof chrome !== 'undefined' && chrome.runtime) {
-          // Use extension for auto-fill
+        const canUseExtension = typeof chrome !== 'undefined' && chrome.runtime;
+
+        if (hasCredentials && canUseExtension) {
+          // Try extension flow (auto-detects ID or prompts if missing)
           await handleExtensionAccess();
         } else {
           // No extension - open tool directly (user will login manually)
