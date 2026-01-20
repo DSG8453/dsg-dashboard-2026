@@ -58,13 +58,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('[DSG Extension] Internal message:', request.action);
   
   if (request.action === 'GET_PENDING_LOGIN') {
-    // Check if there's a pending login for this tab
+    // Check if there's a pending login for this tab.
+    // Do not clear here so iframes can also attempt to fill.
     chrome.storage.local.get('pendingLogin', (data) => {
       const pending = data.pendingLogin;
       if (pending && isUrlMatch(pending.url, sender.tab?.url)) {
         sendResponse(pending);
-        // Clear after sending to content script
-        chrome.storage.local.remove('pendingLogin');
       } else {
         sendResponse(null);
       }

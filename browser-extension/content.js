@@ -79,6 +79,10 @@
         setTimeout(() => {
           fillField(passwordInput, creds.password);
           console.log('[DSG Extension] Credentials filled!');
+
+          // Clear pending login once we've filled the fields
+          chrome.runtime.sendMessage({ action: 'CLEAR_PENDING_LOGIN' });
+          chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS', toolName: creds.toolName });
           
           // Auto-click login button
           setTimeout(() => {
