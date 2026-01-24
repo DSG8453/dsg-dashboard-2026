@@ -24,7 +24,15 @@ async function fetchAPI(endpoint, options = {}) {
   
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || `API Error: ${response.status}`);
+    const errorMessage = errorData.detail || `API Error: ${response.status}`;
+    if (response.status === 401 && localStorage.getItem('dsg_token')) {
+      localStorage.removeItem('dsg_token');
+      localStorage.removeItem('dsg_user');
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login?reason=expired';
+      }
+    }
+    throw new Error(errorMessage);
   }
   
   return response.json();
