@@ -1,14 +1,66 @@
 // API Service - Centralized API calls with authentication
 const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
+// Track if we're currently refreshing the token to avoid infinite loops
+let isRefreshing = false;
+let refreshPromise = null;
+
 // Helper to get auth token
 const getAuthHeader = () => {
   const token = localStorage.getItem('dsg_token');
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
-// Generic fetch wrapper with error handling
-async function fetchAPI(endpoint, options = {}) {
+// Refresh token function
+async function refreshToken() {
+  const token = localStorage.getItem('dsg_token');
+  if (!token) throw new Error('No token to refresh');
+  
+  const response = await fetch(`${API_URL}/api/auth/refresh`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+  
+  if (!response.ok) {
+    throw new Error('Token refresh failed');
+  }
+  
+  const data = await response.json();
+  
+  if (data.access_token) {
+    localStorage.setItem('dsg_token', data.access_token);
+    if (data.user) {
+      localStorage.setItem('dsg_user', JSON.stringify(data.user));
+    }
+    console.log('[API] Token refreshed successfully');
+    return data.access_token;
+  }
+  
+  throw new Error('No token in refresh response');
+}
+
+// Handle token refresh with deduplication
+async function handleTokenRefresh() {
+  if (isRefreshing) {
+    // Wait for the ongoing refresh
+    return refreshPromise;
+  }
+  
+  isRefreshing = true;
+  refreshPromise = refreshToken()
+    .finally(() => {
+      isRefreshing = false;
+      refreshPromise = null;
+    });
+  
+  return refreshPromise;
+}
+
+// Generic fetch wrapper with error handling and auto-retry on 401
+async function fetchAPI(endpoint, options = {}, retryCount = 0) {
   const url = `${API_URL}${endpoint}`;
   
   const config = {
@@ -21,6 +73,29 @@ async function fetchAPI(endpoint, options = {}) {
   };
 
   const response = await fetch(url, config);
+  
+  // If 401 and we haven't retried yet, try refreshing the token
+  if (response.status === 401 && retryCount === 0) {
+    // Don't retry token refresh endpoint itself
+    if (!endpoint.includes('/api/auth/refresh')) {
+      console.log('[API] 401 received, attempting token refresh...');
+      try {
+        await handleTokenRefresh();
+        // Retry the original request with new token
+        return fetchAPI(endpoint, options, retryCount + 1);
+      } catch (refreshError) {
+        console.error('[API] Token refresh failed:', refreshError);
+        // Clear auth state on refresh failure
+        localStorage.removeItem('dsg_token');
+        localStorage.removeItem('dsg_user');
+        // Redirect to login
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
+        throw new Error('Session expired. Please log in again.');
+      }
+    }
+  }
   
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
