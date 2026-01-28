@@ -79,6 +79,10 @@
         setTimeout(() => {
           fillField(passwordInput, creds.password);
           console.log('[DSG Extension] Credentials filled!');
+
+          // Clear pending login once we've filled the fields
+          chrome.runtime.sendMessage({ action: 'CLEAR_PENDING_LOGIN' });
+          chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS', toolName: creds.toolName });
           
           // Auto-click login button
           setTimeout(() => {
@@ -624,10 +628,12 @@
     if (!element) return false;
     
     const style = window.getComputedStyle(element);
-    return style.display !== 'none' && 
-           style.visibility !== 'hidden' && 
-           style.opacity !== '0' &&
-           element.offsetParent !== null;
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+      return false;
+    }
+    
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
   }
   
   function fillField(element, value) {

@@ -4,6 +4,39 @@
 
 // Store pending login data
 let pendingLogins = {};
+const pendingTabs = {};
+
+function buildHostPattern(urlString) {
+  try {
+    const url = new URL(urlString);
+    return `${url.protocol}//${url.hostname}/*`;
+  } catch (error) {
+    return null;
+  }
+}
+
+async function ensureHostPermission(loginUrl) {
+  const pattern = buildHostPattern(loginUrl);
+  if (!pattern) {
+    return false;
+  }
+
+  const hasPermission = await new Promise((resolve) => {
+    chrome.permissions.contains({ origins: [pattern] }, (result) => {
+      resolve(!!result);
+    });
+  });
+
+  if (hasPermission) {
+    return true;
+  }
+
+  return new Promise((resolve) => {
+    chrome.permissions.request({ origins: [pattern] }, (granted) => {
+      resolve(!!granted);
+    });
+  });
+}
 
 // Listen for messages from DSG Transport dashboard (external)
 chrome.runtime.onMessageExternal.addListener(
@@ -58,13 +91,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('[DSG Extension] Internal message:', request.action);
   
   if (request.action === 'GET_PENDING_LOGIN') {
-    // Check if there's a pending login for this tab
+    // Check if there's a pending login for this tab.
+    // Do not clear here so iframes can also attempt to fill.
     chrome.storage.local.get('pendingLogin', (data) => {
       const pending = data.pendingLogin;
       if (pending && isUrlMatch(pending.url, sender.tab?.url)) {
         sendResponse(pending);
-        // Clear after sending to content script
-        chrome.storage.local.remove('pendingLogin');
       } else {
         sendResponse(null);
       }
@@ -99,6 +131,11 @@ async function handleSecureLogin(request, sendResponse) {
     console.log('[DSG Extension] Tool:', request.toolName);
     console.log('[DSG Extension] Login URL:', request.loginUrl);
     console.log('[DSG Extension] Has encrypted payload:', !!request.encryptedPayload);
+
+    const permissionGranted = await ensureHostPermission(request.loginUrl);
+    if (!permissionGranted) {
+      throw new Error('Host access not granted for login URL');
+    }
     
     // Get the backend URL dynamically (captured from sender origin)
     const backendUrl = getDynamicBackendUrl();
@@ -163,6 +200,10 @@ async function handleSecureLogin(request, sendResponse) {
       url: request.loginUrl,
       active: true
     });
+    pendingTabs[tab.id] = {
+      url: request.loginUrl,
+      expiresAt: Date.now() + (2 * 60 * 1000)
+    };
     
     console.log('[DSG Extension] Tab opened:', tab.id);
     
@@ -193,6 +234,11 @@ async function handleSecureLogin(request, sendResponse) {
 async function handleAutoLogin(request, sendResponse) {
   try {
     console.log('[DSG Extension] Starting auto-login for:', request.toolName);
+
+    const permissionGranted = await ensureHostPermission(request.loginUrl);
+    if (!permissionGranted) {
+      throw new Error('Host access not granted for login URL');
+    }
     
     const loginData = {
       url: request.loginUrl,
@@ -212,6 +258,10 @@ async function handleAutoLogin(request, sendResponse) {
       url: request.loginUrl,
       active: true
     });
+    pendingTabs[tab.id] = {
+      url: request.loginUrl,
+      expiresAt: Date.now() + (2 * 60 * 1000)
+    };
     
     console.log('[DSG Extension] Opened tab:', tab.id, 'URL:', request.loginUrl);
     
@@ -321,6 +371,26 @@ setInterval(() => {
 // Listen for tab updates to inject content script when needed
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
+    const pending = pendingTabs[tabId];
+    if (pending) {
+      if (pending.expiresAt < Date.now()) {
+        delete pendingTabs[tabId];
+        return;
+      }
+
+      chrome.scripting.executeScript(
+        {
+          target: { tabId, allFrames: true },
+          files: ['content.js']
+        },
+        () => {
+          if (chrome.runtime.lastError) {
+            console.log('[DSG Extension] Script injection failed:', chrome.runtime.lastError.message);
+          }
+        }
+      );
+    }
+
     chrome.storage.local.get('pendingLogin', (data) => {
       if (data.pendingLogin && isUrlMatch(data.pendingLogin.url, tab.url)) {
         console.log('[DSG Extension] Tab loaded, re-checking for credential fill');
