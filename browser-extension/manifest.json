@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DSG Transport Secure Login",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Secure auto-login for licensed business applications used by DSG Transport LLC. Credentials never visible to users.",
   "permissions": [
     "storage",

@@ -99,35 +99,52 @@ async function handleSecureLogin(request, sendResponse) {
     console.log('[DSG Extension] Tool:', request.toolName);
     console.log('[DSG Extension] Login URL:', request.loginUrl);
     console.log('[DSG Extension] Has encrypted payload:', !!request.encryptedPayload);
+    console.log('[DSG Extension] Encrypted payload length:', request.encryptedPayload?.length || 0);
     
     // Get the backend URL dynamically (captured from sender origin)
     const backendUrl = getDynamicBackendUrl();
-    console.log('[DSG Extension] Calling decrypt API at:', backendUrl);
+    console.log('[DSG Extension] Backend URL:', backendUrl);
+    console.log('[DSG Extension] Calling decrypt API...');
     
-    const decryptResponse = await fetch(backendUrl + '/api/secure-access/decrypt-payload', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Origin': chrome.runtime.getURL('')
-      },
-      body: JSON.stringify({
-        encrypted: request.encryptedPayload
-      })
-    });
+    let decryptResponse;
+    try {
+      decryptResponse = await fetch(backendUrl + '/api/secure-access/decrypt-payload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': chrome.runtime.getURL('')
+        },
+        body: JSON.stringify({
+          encrypted: request.encryptedPayload
+        })
+      });
+    } catch (fetchError) {
+      console.error('[DSG Extension] Fetch error:', fetchError.message);
+      throw new Error('Network error calling decrypt API: ' + fetchError.message);
+    }
     
     console.log('[DSG Extension] Decrypt response status:', decryptResponse.status);
     
     if (!decryptResponse.ok) {
       const errorText = await decryptResponse.text();
-      console.error('[DSG Extension] Decrypt failed:', errorText);
-      throw new Error('Failed to decrypt credentials: ' + errorText);
+      console.error('[DSG Extension] Decrypt HTTP error:', errorText);
+      throw new Error('Decrypt API returned ' + decryptResponse.status + ': ' + errorText);
     }
     
     const decrypted = await decryptResponse.json();
-    console.log('[DSG Extension] Decrypt result:', { success: decrypted.success, hasUsername: !!decrypted.u, hasPassword: !!decrypted.p });
+    console.log('[DSG Extension] Decrypt result:', { 
+      success: decrypted.success, 
+      hasUsername: !!decrypted.u, 
+      hasPassword: !!decrypted.p,
+      error: decrypted.error || null
+    });
     
     if (!decrypted.success) {
-      throw new Error(decrypted.error || 'Decryption failed');
+      throw new Error(decrypted.error || 'Decryption failed - check EXTENSION_KEY env variable');
+    }
+    
+    if (!decrypted.u || !decrypted.p) {
+      throw new Error('Decrypted payload missing username or password');
     }
     
     // Store login data temporarily (credentials in memory only)
@@ -146,7 +163,8 @@ async function handleSecureLogin(request, sendResponse) {
       url: loginData.url,
       usernameField: loginData.usernameField,
       passwordField: loginData.passwordField,
-      toolName: loginData.toolName
+      toolName: loginData.toolName,
+      hasCredentials: !!(loginData.username && loginData.password)
     });
     
     // Store the pending login
@@ -155,7 +173,11 @@ async function handleSecureLogin(request, sendResponse) {
     
     // Verify storage
     const stored = await chrome.storage.local.get('pendingLogin');
-    console.log('[DSG Extension] Verified storage:', !!stored.pendingLogin);
+    console.log('[DSG Extension] Storage verified:', {
+      hasPending: !!stored.pendingLogin,
+      hasUsername: !!stored.pendingLogin?.username,
+      hasPassword: !!stored.pendingLogin?.password
+    });
     
     // Open the login URL in a new tab
     console.log('[DSG Extension] Opening tab:', request.loginUrl);
@@ -164,12 +186,13 @@ async function handleSecureLogin(request, sendResponse) {
       active: true
     });
     
-    console.log('[DSG Extension] Tab opened:', tab.id);
+    console.log('[DSG Extension] Tab opened successfully:', tab.id);
     
     // Clear credentials from memory after they're used
     setTimeout(() => {
       loginData.username = null;
       loginData.password = null;
+      console.log('[DSG Extension] Credentials cleared from memory');
     }, 15000);
     
     sendResponse({ 
