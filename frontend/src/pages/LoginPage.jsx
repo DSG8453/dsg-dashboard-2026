@@ -42,30 +42,8 @@ export const LoginPage = () => {
     }
   };
 
-  // Handle OAuth callback token in URL hash
-  useEffect(() => {
-    const hash = window.location.hash;
-    console.log("URL Hash:", hash);
-    if (hash && hash.includes("token=")) {
-      const token = hash.split("token=")[1].split("&")[0];
-      if (token) {
-        localStorage.setItem("token", token);
-        try {
-          const payload = JSON.parse(atob(token.split(".")[1]));
-          const userInfo = {
-            id: payload.sub,
-            email: payload.email,
-            role: payload.role
-          };
-          localStorage.setItem("user", JSON.stringify(userInfo));
-          window.location.replace("/");
-        } catch (e) {
-          console.error("Token decode error:", e);
-          window.location.hash = "";
-        }
-      }
-    }
-  }, []);
+  // NOTE: OAuth callback token handling is done in AuthCallback.jsx
+  // which correctly uses dsg_token/dsg_user keys via AuthContext
 
 
   const handleCheckEmail = async (e) => {
