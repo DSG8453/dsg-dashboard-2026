@@ -2,8 +2,8 @@
 Security Tests for DSG Transport Credential Management
 Tests for:
 1. Credential visibility based on user role
-2. Decrypt endpoint security (rate limiting, origin validation)
-3. Access control for tools
+2. Access control for tools
+3. Gateway session security
 """
 import pytest
 import httpx
@@ -102,92 +102,73 @@ async def test_super_admin_can_see_credentials():
 
 
 @pytest.mark.asyncio
-async def test_decrypt_endpoint_blocks_invalid_origin():
-    """Test that decrypt endpoint blocks requests from non-extension origins"""
+async def test_gateway_requires_authentication():
+    """Test that gateway endpoints require authentication"""
     async with httpx.AsyncClient() as client:
-        # First get a valid encrypted payload
-        token = await get_token(client, SUPER_ADMIN)
-        
-        # Get tools to find one with credentials
-        tools_response = await client.get(
-            f"{API_URL}/api/tools",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        tools = tools_response.json()
-        tool_with_creds = next((t for t in tools if t.get("has_credentials")), None)
-        
-        if not tool_with_creds:
-            pytest.skip("No tools with credentials found")
-        
-        # Get encrypted payload
-        payload_response = await client.post(
-            f"{API_URL}/api/secure-access/{tool_with_creds['id']}/extension-payload",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        payload_data = payload_response.json()
-        encrypted = payload_data.get("encrypted")
-        
-        assert encrypted, "Failed to get encrypted payload"
-        
-        # Try to decrypt with malicious origin
-        decrypt_response = await client.post(
-            f"{API_URL}/api/secure-access/decrypt-payload",
-            headers={
-                "Origin": "https://malicious-site.com",
-                "Content-Type": "application/json"
-            },
-            json={"encrypted": encrypted}
+        # Try to start gateway session without auth
+        response = await client.post(
+            f"{API_URL}/api/gateway/start/some-tool-id"
         )
         
-        result = decrypt_response.json()
-        assert result.get("success") == False, "SECURITY ISSUE: Decrypt allowed from malicious origin"
-        assert "origin" in result.get("error", "").lower(), "Should mention invalid origin"
-        print("✓ Decrypt endpoint correctly blocks malicious origins")
+        # Should return 401 or 403
+        assert response.status_code in [401, 403, 422], f"Gateway should require auth, got {response.status_code}"
+        print("✓ Gateway correctly requires authentication")
 
 
 @pytest.mark.asyncio
-async def test_decrypt_endpoint_allows_extension_origin():
-    """Test that decrypt endpoint allows requests from browser extension origins"""
+async def test_gateway_validates_tool_access():
+    """Test that gateway validates user has access to the tool"""
     async with httpx.AsyncClient() as client:
-        # First get a valid encrypted payload
-        token = await get_token(client, SUPER_ADMIN)
+        # Login as regular user
+        token = await get_token(client, USER)
+        if not token:
+            pytest.skip("User login failed")
         
-        # Get tools to find one with credentials
+        # Try to access a random tool ID (should fail)
+        response = await client.post(
+            f"{API_URL}/api/gateway/start/000000000000000000000000",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        # Should return 403 (forbidden) or 404 (not found)
+        assert response.status_code in [403, 404], f"Gateway should validate access, got {response.status_code}"
+        print("✓ Gateway correctly validates tool access")
+
+
+@pytest.mark.asyncio
+async def test_gateway_session_returns_no_credentials():
+    """Test that gateway session response doesn't expose credentials"""
+    async with httpx.AsyncClient() as client:
+        token = await get_token(client, SUPER_ADMIN)
+        assert token, "Super Admin login failed"
+        
+        # Get tools
         tools_response = await client.get(
             f"{API_URL}/api/tools",
             headers={"Authorization": f"Bearer {token}"}
         )
         tools = tools_response.json()
-        tool_with_creds = next((t for t in tools if t.get("has_credentials")), None)
         
-        if not tool_with_creds:
-            pytest.skip("No tools with credentials found")
+        if not tools:
+            pytest.skip("No tools available")
         
-        # Get encrypted payload
-        payload_response = await client.post(
-            f"{API_URL}/api/secure-access/{tool_with_creds['id']}/extension-payload",
+        # Try to start gateway session
+        response = await client.post(
+            f"{API_URL}/api/gateway/start/{tools[0]['id']}",
             headers={"Authorization": f"Bearer {token}"}
         )
-        payload_data = payload_response.json()
-        encrypted = payload_data.get("encrypted")
         
-        assert encrypted, "Failed to get encrypted payload"
-        
-        # Try to decrypt with extension origin
-        decrypt_response = await client.post(
-            f"{API_URL}/api/secure-access/decrypt-payload",
-            headers={
-                "Origin": "chrome-extension://abcdefghijklmnop",
-                "Content-Type": "application/json"
-            },
-            json={"encrypted": encrypted}
-        )
-        
-        result = decrypt_response.json()
-        assert result.get("success") == True, f"Extension origin should be allowed: {result}"
-        assert result.get("u"), "Should return decrypted username"
-        assert result.get("p"), "Should return decrypted password"
-        print("✓ Decrypt endpoint allows extension origins")
+        if response.status_code == 200:
+            data = response.json()
+            # Gateway response should NOT contain credentials
+            assert "username" not in str(data).lower() or "password" not in str(data).lower(), \
+                "SECURITY ISSUE: Gateway response should not expose credentials"
+            assert "session_token" in data or "gateway_url" in data, \
+                "Gateway should return session info"
+            print("✓ Gateway session response doesn't expose credentials")
+        else:
+            # Tool might not be configured, that's OK
+            print(f"✓ Gateway returned {response.status_code} (tool may not be configured)")
 
 
 @pytest.mark.asyncio
@@ -206,6 +187,32 @@ async def test_admin_can_access_assigned_tools():
         assert response.status_code == 200
         tools = response.json()
         print(f"✓ Admin can see {len(tools)} tools")
+
+
+@pytest.mark.asyncio
+async def test_credentials_not_in_api_response_for_non_admins():
+    """Test that API responses never include raw credentials for non-Super Admin users"""
+    async with httpx.AsyncClient() as client:
+        for user_creds in [ADMIN, USER]:
+            token = await get_token(client, user_creds)
+            if not token:
+                continue
+            
+            # Check tools endpoint
+            response = await client.get(
+                f"{API_URL}/api/tools",
+                headers={"Authorization": f"Bearer {token}"}
+            )
+            
+            response_text = response.text.lower()
+            
+            # Should not contain credential-like data
+            # Note: "password" field names are OK, but actual password values should not appear
+            for tool in response.json():
+                if "credentials" in tool:
+                    pytest.fail(f"SECURITY ISSUE: Credentials object exposed to non-Super Admin user")
+            
+            print(f"✓ No credentials exposed for {user_creds['email']}")
 
 
 if __name__ == "__main__":

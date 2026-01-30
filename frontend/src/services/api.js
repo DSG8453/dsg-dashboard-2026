@@ -267,21 +267,9 @@ export const toolsAPI = {
   delete: (id) => 
     fetchAPI(`/api/tools/${id}`, { method: 'DELETE' }),
   
-  // Secure access - request one-time access token
-  requestSecureAccess: (toolId) =>
-    fetchAPI(`/api/secure-access/${toolId}/request-access`, { method: 'POST' }),
-  
-  // Gateway access - access tool through dashboard proxy
+  // Secure gateway session - credentials handled entirely server-side
   startGatewaySession: (toolId) =>
     fetchAPI(`/api/gateway/start/${toolId}`, { method: 'POST' }),
-  
-  // Get credentials payload for browser extension
-  getExtensionPayload: (toolId) =>
-    fetchAPI(`/api/secure-access/${toolId}/extension-payload`, { method: 'POST' }),
-  
-  // Direct login - Server logs in and returns authenticated session (Bitwarden-style)
-  directLogin: (toolId) =>
-    fetchAPI(`/api/secure-access/${toolId}/direct-login`, { method: 'POST' }),
 };
 
 // Credentials API

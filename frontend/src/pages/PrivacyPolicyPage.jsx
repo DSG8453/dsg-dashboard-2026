@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Shield, Lock, Database, Mail, FileText, Users } from "lucide-react";
 
 export const PrivacyPolicyPage = () => {
-  const lastUpdated = "December 26, 2024";
+  const lastUpdated = "January 29, 2026";
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
@@ -17,7 +17,7 @@ export const PrivacyPolicyPage = () => {
             />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-          <p className="text-gray-600">DSG Transport Secure Login Extension</p>
+          <p className="text-gray-600">DSG Transport Secure Portal</p>
           <p className="text-sm text-gray-500 mt-2">Last Updated: {lastUpdated}</p>
         </div>
 
@@ -32,8 +32,8 @@ export const PrivacyPolicyPage = () => {
               </div>
               <p className="text-gray-700 leading-relaxed">
                 DSG Transport LLC ("Company," "we," "our," or "us") is committed to protecting your privacy. 
-                This Privacy Policy explains how the DSG Transport Secure Login browser extension 
-                ("Extension") collects, uses, and safeguards your information when you use our Extension 
+                This Privacy Policy explains how the DSG Transport Secure Portal 
+                ("Portal") collects, uses, and safeguards your information when you use our Portal 
                 to access licensed third-party business applications authorized by DSG Transport LLC.
               </p>
             </section>
@@ -44,10 +44,10 @@ export const PrivacyPolicyPage = () => {
                 <Database className="h-5 w-5 text-blue-600" />
                 <h2 className="text-xl font-semibold text-gray-900">Information We Collect</h2>
               </div>
-              <p className="text-gray-700 mb-3">The Extension collects the following information:</p>
+              <p className="text-gray-700 mb-3">The Portal collects the following information:</p>
               <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
                 <li><strong>Device Information:</strong> Browser type, device fingerprint, and IP address for device authentication and security purposes.</li>
-                <li><strong>Authentication Data:</strong> Login credentials (username/email and password) that are securely stored and used solely for automated login to licensed third-party business applications authorized by DSG Transport LLC.</li>
+                <li><strong>Authentication Data:</strong> Login credentials that are securely stored in Google Secret Manager and used solely for automated login to licensed third-party business applications authorized by DSG Transport LLC.</li>
                 <li><strong>Usage Data:</strong> Information about which licensed applications are accessed and when, for audit and security logging purposes.</li>
               </ul>
             </section>
@@ -60,11 +60,11 @@ export const PrivacyPolicyPage = () => {
               </div>
               <p className="text-gray-700 mb-3">We use the collected information for the following purposes:</p>
               <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
-                <li>To provide secure, automated login functionality to licensed third-party business applications authorized by DSG Transport LLC</li>
+                <li>To provide secure access to licensed third-party business applications authorized by DSG Transport LLC</li>
                 <li>To authenticate and verify authorized devices</li>
                 <li>To maintain security and prevent unauthorized access</li>
                 <li>To generate activity logs for compliance and auditing purposes</li>
-                <li>To improve the Extension's functionality and user experience</li>
+                <li>To improve the Portal's functionality and user experience</li>
               </ul>
             </section>
 
@@ -76,11 +76,12 @@ export const PrivacyPolicyPage = () => {
               </div>
               <p className="text-gray-700 mb-3">DSG Transport LLC takes data security seriously:</p>
               <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
-                <li>All credentials are encrypted using industry-standard encryption methods</li>
-                <li>Data is stored on secure servers managed by DSG Transport LLC with restricted access</li>
+                <li>All credentials are stored securely in Google Cloud Secret Manager</li>
+                <li>Credentials are never exposed to the frontend or user's browser</li>
+                <li>All authentication happens server-side through a secure gateway</li>
                 <li>We implement role-based access controls to limit data access</li>
                 <li>Regular security audits are conducted to ensure data protection</li>
-                <li>Credentials are never exposed in plain text to users (zero-visibility security)</li>
+                <li>All data transmission uses industry-standard TLS encryption</li>
               </ul>
             </section>
 
@@ -93,7 +94,7 @@ export const PrivacyPolicyPage = () => {
               <p className="text-gray-700 leading-relaxed">
                 DSG Transport LLC does not sell, trade, or otherwise transfer your personal information to third parties. 
                 Your data is only shared with the specific licensed third-party business applications you are authorized to access, 
-                solely for the purpose of automated authentication. We may disclose information if 
+                solely for the purpose of authentication. We may disclose information if 
                 required by law or to protect our rights and the security of our systems.
               </p>
             </section>
@@ -117,9 +118,9 @@ export const PrivacyPolicyPage = () => {
             <section>
               <h2 className="text-xl font-semibold text-gray-900 mb-3">Cookies and Tracking</h2>
               <p className="text-gray-700 leading-relaxed">
-                The Extension uses local storage to maintain your session and preferences. 
-                DSG Transport LLC does not use third-party tracking cookies or analytics within the Extension. 
-                Any data stored locally is encrypted and used solely for the Extension's functionality.
+                The Portal uses local storage to maintain your session and preferences. 
+                DSG Transport LLC does not use third-party tracking cookies or analytics within the Portal. 
+                Any data stored locally is used solely for authentication and user preferences.
               </p>
             </section>
 
@@ -127,11 +128,11 @@ export const PrivacyPolicyPage = () => {
             <section>
               <h2 className="text-xl font-semibold text-gray-900 mb-3">Licensed Third-Party Applications</h2>
               <p className="text-gray-700 leading-relaxed">
-                The Extension facilitates access to licensed third-party business applications for which 
+                The Portal facilitates access to licensed third-party business applications for which 
                 DSG Transport LLC holds valid subscriptions. These third-party applications have their own 
                 privacy policies and terms of service. DSG Transport LLC is not responsible for the privacy 
                 practices of these third-party applications. We encourage you to review the privacy policies 
-                of any third-party applications you access through this Extension.
+                of any third-party applications you access through this Portal.
               </p>
             </section>
 
@@ -141,7 +142,7 @@ export const PrivacyPolicyPage = () => {
               <p className="text-gray-700 leading-relaxed">
                 DSG Transport LLC may update this Privacy Policy from time to time. Any changes will be posted on this page 
                 with an updated "Last Updated" date. We encourage you to review this Privacy Policy periodically 
-                for any changes. Your continued use of the Extension after any modifications indicates your 
+                for any changes. Your continued use of the Portal after any modifications indicates your 
                 acceptance of the updated Privacy Policy.
               </p>
             </section>
