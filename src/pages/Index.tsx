@@ -41,8 +41,6 @@ const Index = () => {
           </Button>
 
           <p className="text-center text-xs text-gray-500 pt-2">
-            This preview environment is for Lovable development only.
-            <br />
             Your production portal runs at portal.dsgtransport.net
           </p>
         </CardContent>
