@@ -315,20 +315,29 @@ export const AuthProvider = ({ children }) => {
 
   // Direct Token Login (New Google OAuth flow)
   const loginWithToken = async (jwtToken) => {
+    console.log('[Auth] loginWithToken called');
+    console.log('[Auth] Token length:', jwtToken?.length);
+    
     try {
       // Save token first
+      console.log('[Auth] Saving token to localStorage');
       localStorage.setItem("dsg_token", jwtToken);
       setToken(jwtToken);
       
       // Fetch user data with the token
+      console.log('[Auth] Fetching user data with authAPI.getMe()');
       const userData = await authAPI.getMe();
+      console.log('[Auth] User data received:', userData);
       
       // Save user data
       localStorage.setItem("dsg_user", JSON.stringify(userData));
       setUser(userData);
+      console.log('[Auth] User state updated');
       
       // Register device after login
+      console.log('[Auth] Registering device');
       const deviceResult = await registerDevice(userData);
+      console.log('[Auth] Device registration result:', deviceResult);
       
       return { 
         success: true,
@@ -337,6 +346,7 @@ export const AuthProvider = ({ children }) => {
         deviceStatus: deviceResult.status 
       };
     } catch (error) {
+      console.error('[Auth] loginWithToken error:', error);
       // Clear token if getMe fails
       localStorage.removeItem("dsg_token");
       setToken(null);
