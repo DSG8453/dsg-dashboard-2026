@@ -59,6 +59,9 @@ export const LoginPage = () => {
         case 'userinfo_failed':
           errorMessage = "Failed to get user information from Google. Please try again.";
           break;
+        case 'domain_not_allowed':
+          errorMessage = `Access denied. Your email domain (${errorEmail || 'unknown'}) is not authorized to use this system. Only @dsgtransport.net, @dsgtransport.com, and @teamdsgtransport.com emails are allowed.`;
+          break;
         default:
           errorMessage = `Authentication failed: ${error}`;
       }

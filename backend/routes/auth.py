@@ -30,6 +30,21 @@ except Exception as e:
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
+# Allowed email domains for login
+# Only users with emails from these domains can access the dashboard
+ALLOWED_DOMAINS = [
+    "dsgtransport.net",
+    "dsgtransport.com", 
+    "teamdsgtransport.com"
+]
+
+def is_email_domain_allowed(email: str) -> bool:
+    """Check if the email domain is in the allowed list"""
+    if not email:
+        return False
+    domain = email.lower().split("@")[-1]
+    return domain in ALLOWED_DOMAINS
+
 # Google OAuth redirect URI - uses GOOGLE_REDIRECT_URI env var if set, otherwise constructs from FRONTEND_URL
 # This allows flexibility between:
 #   1. Direct backend URL (api.dsgtransport.net)
@@ -120,6 +135,13 @@ async def login(request: LoginRequest):
     
     email = request.email.lower().strip()
     SUPER_ADMIN_EMAIL = "info@dsgtransport.net"
+    
+    # Check if email domain is allowed
+    if not is_email_domain_allowed(email):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Your email domain is not authorized to use this system."
+        )
     
     # Find user by email
     user = await db.users.find_one({"email": email})
@@ -590,6 +612,11 @@ async def google_callback(request: Request, code: str = None, error: str = None)
     
     if not google_email:
         return RedirectResponse(url=f"{frontend_url}/login?error=no_email")
+    
+    # Check if email domain is allowed
+    if not is_email_domain_allowed(google_email):
+        print(f"[Google OAuth] Domain not allowed for email: {google_email}")
+        return RedirectResponse(url=f"{frontend_url}/login?error=domain_not_allowed&email={google_email}")
     
     # Find existing user by email
     user = await db.users.find_one({"email": google_email})
