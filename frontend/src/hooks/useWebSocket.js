@@ -1,4 +1,7 @@
-// WebSocket notification types - exported for use in AuthContext
+// Notification types - kept for reference and potential future use
+// Note: WebSocket functionality has been removed from the frontend.
+// Authentication now relies solely on HTTP login, JWT tokens (stored in localStorage),
+// and REST API calls. Dashboard updates use manual refresh via the refreshDashboard function.
 export const NotificationType = {
   TOOL_ACCESS_UPDATED: 'tool_access_updated',
   TOOL_DELETED: 'tool_deleted',
@@ -10,5 +13,4 @@ export const NotificationType = {
   CREDENTIALS_UPDATED: 'credentials_updated',
 };
 
-// Note: WebSocket is now handled directly in AuthContext for simpler state management
 export default NotificationType;
