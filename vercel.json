@@ -1,4 +1,4 @@
 {
-  "version": 2,
-  "rootDirectory": "frontend"
+  "buildCommand": "cd frontend && npm install --legacy-peer-deps && npm run build",
+  "outputDirectory": "frontend/build"
 }
