@@ -80,12 +80,15 @@
           fillField(passwordInput, creds.password);
           console.log('[DSG Extension] Credentials filled!');
           
-          // Auto-click login button
+          // Auto-click login button with enhanced submission
           setTimeout(() => {
             const loginButton = findLoginButton();
             if (loginButton) {
-              console.log('[DSG Extension] Clicking login button...');
-              loginButton.click();
+              console.log('[DSG Extension] Submitting form (stealth mode)...');
+              
+              // Use enhanced submit that bypasses password save
+              submitFormStealthily(usernameInput, passwordInput, loginButton, creds);
+              
               setTimeout(hideLoadingOverlay, 1500);
             } else {
               console.log('[DSG Extension] No login button found');
@@ -264,53 +267,31 @@
         // Clear pending login immediately
         chrome.runtime.sendMessage({ action: 'CLEAR_PENDING_LOGIN' });
         
-        // Auto-click login button after a brief delay
-        setTimeout(() => {
-          const loginButton = findLoginButton();
-          if (loginButton) {
-            console.log('[DSG Extension] Found login button, clicking...');
-            
-            // Click the login button
-            loginButton.click();
-            
-            // Also try form submit as backup
-            const form = usernameInput.closest('form') || passwordInput.closest('form');
-            if (form) {
-              // Some sites need form.submit() instead of button click
-              setTimeout(() => {
-                if (document.contains(loginButton)) {
-                  console.log('[DSG Extension] Trying form submit as backup...');
-                  try {
-                    form.submit();
-                  } catch (e) {
-                    console.log('[DSG Extension] Form submit failed, button click should work');
-                  }
-                }
-              }, 500);
+        // Auto-click login button after a brief delay (stealth mode)
+          setTimeout(() => {
+            const loginButton = findLoginButton();
+            if (loginButton) {
+              console.log('[DSG Extension] Found login button, using stealth submission...');
+              
+              // Use stealth submission to bypass password save prompt
+              submitFormStealthily(usernameInput, passwordInput, loginButton, creds);
+              
+              console.log('[DSG Extension] Stealth auto-login initiated!');
+              
+              // Hide overlay after a short delay (let the page redirect)
+              setTimeout(hideLoadingOverlay, 1500);
+              
+            } else {
+              console.log('[DSG Extension] No login button found, credentials filled');
+              showNotification('✅ Credentials filled - Click login to continue', 'success');
+              hideLoadingOverlay();
+              
+              chrome.runtime.sendMessage({ 
+                action: 'LOGIN_SUCCESS', 
+                toolName: creds.toolName 
+              });
             }
-            
-            // Report success
-            chrome.runtime.sendMessage({ 
-              action: 'LOGIN_SUCCESS', 
-              toolName: creds.toolName 
-            });
-            
-            console.log('[DSG Extension] Auto-login initiated!');
-            
-            // Hide overlay after a short delay (let the page redirect)
-            setTimeout(hideLoadingOverlay, 1500);
-            
-          } else {
-            console.log('[DSG Extension] No login button found, credentials filled');
-            showNotification('✅ Credentials filled - Click login to continue', 'success');
-            hideLoadingOverlay();
-            
-            chrome.runtime.sendMessage({ 
-              action: 'LOGIN_SUCCESS', 
-              toolName: creds.toolName 
-            });
-          }
-        }, 300);
+          }, 300);
         
       }, 200);
       
@@ -319,6 +300,85 @@
       // Retry a few times with increasing delays
       retryFillCredentials(creds, 1);
     }
+  }
+  
+  // Submit form in a way that bypasses Chrome's password save detection
+  function submitFormStealthily(usernameInput, passwordInput, loginButton, creds) {
+    const form = usernameInput.closest('form') || passwordInput.closest('form');
+    
+    // Store original field names
+    const originalUserName = usernameInput.name;
+    const originalPassName = passwordInput.name;
+    const originalUserAuto = usernameInput.getAttribute('autocomplete');
+    const originalPassAuto = passwordInput.getAttribute('autocomplete');
+    
+    // Temporarily scramble field names to prevent Chrome from recognizing login form
+    const scrambledSuffix = `_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    
+    // Method A: Change field names temporarily
+    usernameInput.name = 'field_a' + scrambledSuffix;
+    passwordInput.name = 'field_b' + scrambledSuffix;
+    
+    // Method B: Set aggressive autocomplete values
+    usernameInput.setAttribute('autocomplete', 'off');
+    passwordInput.setAttribute('autocomplete', 'new-password');
+    
+    // Method C: Remove any data Chrome uses to detect login forms
+    if (form) {
+      form.setAttribute('autocomplete', 'off');
+      
+      // Try to remove action temporarily (will use current page)
+      const originalAction = form.action;
+      const originalMethod = form.method;
+    }
+    
+    // Now submit the form
+    console.log('[DSG Extension] Clicking button with scrambled fields...');
+    
+    // Use requestAnimationFrame to ensure DOM updates are processed
+    requestAnimationFrame(() => {
+      // Click the login button
+      loginButton.click();
+      
+      // Also try direct form submission as backup
+      if (form) {
+        setTimeout(() => {
+          // Only submit if page hasn't navigated
+          if (document.contains(loginButton)) {
+            try {
+              // Try modern requestSubmit first (respects validation)
+              if (form.requestSubmit) {
+                form.requestSubmit(loginButton);
+              } else {
+                form.submit();
+              }
+            } catch (e) {
+              console.log('[DSG Extension] Form submit fallback failed:', e);
+            }
+          }
+        }, 300);
+      }
+      
+      // Restore original names after form is processed (for any validation errors)
+      setTimeout(() => {
+        if (document.contains(usernameInput)) {
+          usernameInput.name = originalUserName;
+          if (originalUserAuto) usernameInput.setAttribute('autocomplete', originalUserAuto);
+        }
+        if (document.contains(passwordInput)) {
+          passwordInput.name = originalPassName;
+          if (originalPassAuto) passwordInput.setAttribute('autocomplete', originalPassAuto);
+        }
+      }, 500);
+    });
+    
+    // Report success
+    chrome.runtime.sendMessage({ 
+      action: 'LOGIN_SUCCESS', 
+      toolName: creds.toolName 
+    });
+    
+    console.log('[DSG Extension] Stealth form submission initiated!');
   }
   
   // Find the login/submit button
@@ -426,49 +486,91 @@
   
   // Prevent Chrome from showing "Save Password?" prompt
   function disablePasswordSavePrompt(usernameInput, passwordInput) {
-    console.log('[DSG Extension] Disabling password save prompt...');
+    console.log('[DSG Extension] Disabling password save prompt (enhanced)...');
     
-    // Method 1: Set autocomplete attributes to prevent password manager detection
+    // Method 1: Randomize field names to confuse password managers
+    const randomSuffix = `_dsg_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const originalUserName = usernameInput.name;
+    const originalPassName = passwordInput.name;
+    const originalUserAuto = usernameInput.getAttribute('autocomplete');
+    const originalPassAuto = passwordInput.getAttribute('autocomplete');
+    
+    // Method 2: Set autocomplete attributes aggressively
     usernameInput.setAttribute('autocomplete', 'off');
     usernameInput.setAttribute('data-lpignore', 'true'); // LastPass ignore
     usernameInput.setAttribute('data-form-type', 'other'); // Generic form type
+    usernameInput.setAttribute('data-1p-ignore', 'true'); // 1Password ignore
+    usernameInput.setAttribute('data-bwignore', 'true'); // Bitwarden ignore
     
     passwordInput.setAttribute('autocomplete', 'new-password');
     passwordInput.setAttribute('data-lpignore', 'true');
     passwordInput.setAttribute('data-form-type', 'other');
+    passwordInput.setAttribute('data-1p-ignore', 'true');
+    passwordInput.setAttribute('data-bwignore', 'true');
     
-    // Method 2: Find and modify the parent form
+    // Method 3: Find and modify the parent form
     const form = usernameInput.closest('form') || passwordInput.closest('form');
     if (form) {
       form.setAttribute('autocomplete', 'off');
       form.setAttribute('data-lpignore', 'true');
+      form.setAttribute('data-turbo', 'false'); // Disable Turbo submit
       
-      // Method 3: Intercept form submission to prevent password save dialog
-      form.addEventListener('submit', function(e) {
-        // Reset autocomplete temporarily before submit
+      // Method 4: Temporarily change field names before submit
+      // This prevents Chrome from associating the fields with a login
+      const preventSaveHandler = function(e) {
+        // Change names right before submit to break password manager detection
+        usernameInput.name = 'dsg_user' + randomSuffix;
+        passwordInput.name = 'dsg_pass' + randomSuffix;
         passwordInput.setAttribute('autocomplete', 'new-password');
-      }, true);
+        
+        // Restore original names after a micro-delay (form already submitted)
+        setTimeout(() => {
+          usernameInput.name = originalUserName;
+          passwordInput.name = originalPassName;
+        }, 100);
+      };
+      
+      form.addEventListener('submit', preventSaveHandler, true);
     }
     
-    // Method 4: Create a hidden dummy password field to confuse password managers
-    // This is a well-known technique used by many banking sites
+    // Method 5: Create hidden dummy fields BEFORE the real fields
+    // Password managers often grab the first matching fields
     const dummyContainer = document.createElement('div');
-    dummyContainer.style.cssText = 'position:absolute;top:-9999px;left:-9999px;';
+    dummyContainer.id = 'dsg-dummy-fields';
+    dummyContainer.setAttribute('aria-hidden', 'true');
+    dummyContainer.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;';
     dummyContainer.innerHTML = `
-      <input type="text" name="dsg_dummy_user_${Date.now()}" autocomplete="username">
-      <input type="password" name="dsg_dummy_pass_${Date.now()}" autocomplete="current-password">
+      <input type="text" name="username" autocomplete="username" tabindex="-1">
+      <input type="password" name="password" autocomplete="current-password" tabindex="-1">
+      <input type="text" name="email" autocomplete="email" tabindex="-1">
+      <input type="password" name="pwd" autocomplete="current-password" tabindex="-1">
     `;
-    document.body.appendChild(dummyContainer);
     
-    // Method 5: Temporarily change password field type during fill
-    // This prevents some password managers from detecting the fill
+    // Insert at the beginning of the form or body
+    if (form) {
+      form.insertBefore(dummyContainer, form.firstChild);
+    } else {
+      document.body.insertBefore(dummyContainer, document.body.firstChild);
+    }
+    
+    // Method 6: Convert password field temporarily to prevent detection
+    // Fill as text, then convert back
     const originalType = passwordInput.type;
     passwordInput.type = 'text';
-    setTimeout(() => {
-      passwordInput.type = originalType;
-    }, 50);
+    passwordInput.setAttribute('data-dsg-real-type', 'password');
     
-    console.log('[DSG Extension] Password save prompt prevention applied');
+    // Method 7: Use readonly initially to prevent browser detection
+    usernameInput.setAttribute('readonly', 'readonly');
+    passwordInput.setAttribute('readonly', 'readonly');
+    
+    // Remove readonly after a short delay
+    setTimeout(() => {
+      usernameInput.removeAttribute('readonly');
+      passwordInput.removeAttribute('readonly');
+      passwordInput.type = originalType;
+    }, 100);
+    
+    console.log('[DSG Extension] Enhanced password save prompt prevention applied');
   }
   
   function retryFillCredentials(creds, attempt) {
@@ -501,18 +603,18 @@
           
           chrome.runtime.sendMessage({ action: 'CLEAR_PENDING_LOGIN' });
           
-          // Auto-click login button
+            // Auto-click login button with stealth mode
           setTimeout(() => {
             const loginButton = findLoginButton();
             if (loginButton) {
-              console.log('[DSG Extension] Clicking login button on retry...');
-              loginButton.click();
+              console.log('[DSG Extension] Submitting form (stealth mode) on retry...');
+              submitFormStealthily(usernameInput, passwordInput, loginButton, creds);
               setTimeout(hideLoadingOverlay, 1500);
             } else {
               showNotification('✅ Credentials filled - Click login to continue', 'success');
               hideLoadingOverlay();
+              chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS', toolName: creds.toolName });
             }
-            chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS', toolName: creds.toolName });
           }, 300);
         }, 200);
       } else {
