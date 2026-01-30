@@ -29,7 +29,13 @@ except Exception as e:
     print(f"Warning: Could not load Google OAuth secrets: {e}")
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = "https://api.dsgtransport.net/api/auth/google/callback"
+
+# Google OAuth redirect URI - uses GOOGLE_REDIRECT_URI env var if set, otherwise constructs from FRONTEND_URL
+# This allows flexibility between:
+#   1. Direct backend URL (api.dsgtransport.net)
+#   2. Frontend proxy setup (portal.dsgtransport.net/api)
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://portal.dsgtransport.net")
+GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", f"{FRONTEND_URL}/api/auth/google/callback")
 
 class OTPRequest(BaseModel):
     email: str

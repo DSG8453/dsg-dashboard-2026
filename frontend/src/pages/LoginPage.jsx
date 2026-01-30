@@ -84,12 +84,19 @@ export const LoginPage = () => {
     
     try {
       // Direct Google OAuth - redirects to Google login page
+      // If REACT_APP_BACKEND_URL is not set, use relative path (nginx will proxy)
       const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
       const loginUrl = `${backendUrl}/api/auth/google/login`;
       
       console.log('[LoginPage] Starting Google OAuth flow');
-      console.log('[LoginPage] Backend URL:', backendUrl || '(empty - using relative path)');
+      console.log('[LoginPage] Current location:', window.location.href);
+      console.log('[LoginPage] REACT_APP_BACKEND_URL:', backendUrl || '(not set - using relative path)');
       console.log('[LoginPage] Redirecting to:', loginUrl);
+      
+      // For debugging: If backend URL looks wrong, warn the user
+      if (backendUrl && !backendUrl.startsWith('http')) {
+        console.warn('[LoginPage] WARNING: REACT_APP_BACKEND_URL should start with http:// or https://');
+      }
       
       window.location.href = loginUrl;
     } catch (error) {
