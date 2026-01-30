@@ -442,10 +442,32 @@ async def google_login(request: Request):
     # Get the redirect URI from request or use default
     redirect_uri = GOOGLE_REDIRECT_URI
     
-    # For preview environment, use the preview URL
+    # For preview/dev environment, use the request host
     host = request.headers.get("host", "")
-    if "preview" in host or "localhost" in host:
+    origin = request.headers.get("origin", "")
+    referer = request.headers.get("referer", "")
+    
+    print(f"[Google OAuth] Login initiated")
+    print(f"[Google OAuth] Host header: {host}")
+    print(f"[Google OAuth] Origin header: {origin}")
+    print(f"[Google OAuth] Referer header: {referer}")
+    print(f"[Google OAuth] GOOGLE_CLIENT_ID configured: {bool(GOOGLE_CLIENT_ID)}")
+    print(f"[Google OAuth] Default redirect URI: {GOOGLE_REDIRECT_URI}")
+    
+    # Check for various preview/dev patterns
+    is_preview_or_dev = (
+        "preview" in host or 
+        "localhost" in host or
+        "127.0.0.1" in host or
+        "railway" in host or  # Railway preview deployments
+        host.endswith(".up.railway.app")  # Railway deployments
+    )
+    
+    if is_preview_or_dev:
         redirect_uri = f"https://{host}/api/auth/google/callback"
+        print(f"[Google OAuth] Preview/dev mode - using dynamic redirect URI")
+    
+    print(f"[Google OAuth] Using redirect_uri: {redirect_uri}")
     
     # Build Google OAuth URL
     params = {
@@ -458,6 +480,8 @@ async def google_login(request: Request):
     }
     
     google_auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+    
+    print(f"[Google OAuth] Redirecting to Google OAuth URL")
     
     return RedirectResponse(url=google_auth_url)
 
@@ -473,16 +497,36 @@ async def google_callback(request: Request, code: str = None, error: str = None)
     # Get the host for redirect URI
     host = request.headers.get("host", "")
     origin = request.headers.get("origin", "")
+    referer = request.headers.get("referer", "")
     
-    # Determine environment
-    if "preview" in host or "localhost" in host:
+    # Log all relevant headers for debugging
+    print(f"[Google OAuth] Callback received")
+    print(f"[Google OAuth] Host header: {host}")
+    print(f"[Google OAuth] Origin header: {origin}")
+    print(f"[Google OAuth] Referer header: {referer}")
+    print(f"[Google OAuth] Code present: {bool(code)}")
+    print(f"[Google OAuth] Error: {error}")
+    
+    # Determine environment - check for various preview/dev patterns
+    is_preview_or_dev = (
+        "preview" in host or 
+        "localhost" in host or
+        "127.0.0.1" in host or
+        "railway" in host or  # Railway preview deployments
+        host.endswith(".up.railway.app")  # Railway deployments
+    )
+    
+    if is_preview_or_dev:
         redirect_uri = f"https://{host}/api/auth/google/callback"
         frontend_url = f"https://{host}"
+        print(f"[Google OAuth] Preview/dev mode detected")
     else:
         redirect_uri = GOOGLE_REDIRECT_URI
-        frontend_url = "https://portal.dsgtransport.net"
+        # Use FRONTEND_URL env var if set, otherwise default
+        frontend_url = os.environ.get("FRONTEND_URL", "https://portal.dsgtransport.net")
     
-    print(f"[Google OAuth] Callback received - host: {host}, redirect_uri: {redirect_uri}")
+    print(f"[Google OAuth] Using redirect_uri: {redirect_uri}")
+    print(f"[Google OAuth] Using frontend_url: {frontend_url}")
     
     if error:
         print(f"[Google OAuth] Error from Google: {error}")

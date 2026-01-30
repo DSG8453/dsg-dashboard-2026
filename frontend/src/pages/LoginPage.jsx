@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,8 +15,60 @@ export const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [emailChecked, setEmailChecked] = useState(false);
   const [passwordLoginAllowed, setPasswordLoginAllowed] = useState(false);
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      console.log('[LoginPage] User already authenticated, redirecting to dashboard');
+      navigate("/", { replace: true });
+    }
+  }, [isAuthenticated, authLoading, navigate]);
+
+  // Handle OAuth errors from URL query params
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const error = params.get('error');
+    const errorEmail = params.get('email');
+    
+    if (error) {
+      console.log('[LoginPage] OAuth error detected:', error);
+      let errorMessage = "Authentication failed";
+      
+      switch (error) {
+        case 'no_account':
+          errorMessage = `No account found for ${errorEmail || 'this email'}. Please contact your administrator to create an account.`;
+          break;
+        case 'suspended':
+          errorMessage = "Your account is suspended. Please contact your administrator.";
+          break;
+        case 'no_code':
+          errorMessage = "No authorization code received from Google. Please try again.";
+          break;
+        case 'no_email':
+          errorMessage = "Could not retrieve email from Google. Please try again.";
+          break;
+        case 'oauth_failed':
+          errorMessage = "Google authentication failed. Please try again.";
+          break;
+        case 'token_exchange_failed':
+          errorMessage = "Failed to complete authentication with Google. Please try again.";
+          break;
+        case 'userinfo_failed':
+          errorMessage = "Failed to get user information from Google. Please try again.";
+          break;
+        default:
+          errorMessage = `Authentication failed: ${error}`;
+      }
+      
+      toast.error("Login Failed", { description: errorMessage, duration: 8000 });
+      
+      // Clear the error from URL to prevent showing again on refresh
+      navigate('/login', { replace: true });
+    }
+  }, [location.search, navigate]);
 
   // Check if we're inside an iframe (Emergent preview panel)
   const isInIframe = () => {
@@ -33,8 +85,15 @@ export const LoginPage = () => {
     try {
       // Direct Google OAuth - redirects to Google login page
       const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
-      window.location.href = `${backendUrl}/api/auth/google/login`;
+      const loginUrl = `${backendUrl}/api/auth/google/login`;
+      
+      console.log('[LoginPage] Starting Google OAuth flow');
+      console.log('[LoginPage] Backend URL:', backendUrl || '(empty - using relative path)');
+      console.log('[LoginPage] Redirecting to:', loginUrl);
+      
+      window.location.href = loginUrl;
     } catch (error) {
+      console.error('[LoginPage] Google login error:', error);
       setIsLoading(false);
       toast.error("Login failed", {
         description: "Please try again or contact your administrator.",

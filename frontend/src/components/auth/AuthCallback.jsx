@@ -20,9 +20,17 @@ export const AuthCallback = () => {
     hasProcessed.current = true;
 
     const processSession = async () => {
+      console.log('[AuthCallback] Processing OAuth callback');
+      console.log('[AuthCallback] Current URL:', window.location.href);
+      console.log('[AuthCallback] Hash:', location.hash);
+      console.log('[AuthCallback] Search:', location.search);
+      
       // Extract params from URL fragment (after #)
       const hash = location.hash;
       const params = new URLSearchParams(hash.replace("#", ""));
+      
+      // Also check URL query params (some errors come via query string)
+      const queryParams = new URLSearchParams(location.search);
       
       // Check for direct token (from new Google OAuth flow)
       const token = params.get("token");
@@ -30,39 +38,77 @@ export const AuthCallback = () => {
       // Check for session_id (from legacy Emergent auth flow)
       const sessionId = params.get("session_id");
       
-      // Check for error
-      const error = params.get("error");
+      // Check for error in both hash and query params
+      const error = params.get("error") || queryParams.get("error");
+      
+      console.log('[AuthCallback] Token:', token ? `${token.substring(0, 20)}...` : 'none');
+      console.log('[AuthCallback] Session ID:', sessionId || 'none');
+      console.log('[AuthCallback] Error:', error || 'none');
       
       if (error) {
+        const email = params.get("email") || queryParams.get("email");
         let errorMessage = "Authentication failed";
-        if (error === "no_account") {
-          const email = params.get("email");
-          errorMessage = `No account found for ${email || 'this email'}. Please contact your administrator.`;
-        } else if (error === "suspended") {
-          errorMessage = "Your account is suspended. Please contact administrator.";
+        
+        switch (error) {
+          case 'no_account':
+            errorMessage = `No account found for ${email || 'this email'}. Please contact your administrator to create an account.`;
+            break;
+          case 'suspended':
+            errorMessage = "Your account is suspended. Please contact your administrator.";
+            break;
+          case 'no_code':
+            errorMessage = "No authorization code received from Google. Please try again.";
+            break;
+          case 'no_email':
+            errorMessage = "Could not retrieve email from Google. Please try again.";
+            break;
+          case 'oauth_failed':
+            errorMessage = "Google authentication failed. Please try again.";
+            break;
+          case 'token_exchange_failed':
+            errorMessage = "Failed to complete authentication with Google. Please try again.";
+            break;
+          case 'userinfo_failed':
+            errorMessage = "Failed to get user information from Google. Please try again.";
+            break;
+          default:
+            errorMessage = `Authentication failed: ${error}`;
         }
-        toast.error("Login Failed", { description: errorMessage });
+        
+        console.error('[AuthCallback] OAuth error:', error, errorMessage);
+        toast.error("Login Failed", { description: errorMessage, duration: 8000 });
         navigate("/login", { replace: true });
         return;
       }
 
       if (token) {
         // New direct Google OAuth flow - token received directly
+        console.log('[AuthCallback] Processing JWT token from Google OAuth');
         try {
           const result = await loginWithToken(token);
           
+          console.log('[AuthCallback] loginWithToken result:', result);
+          
           if (result.success) {
+            console.log('[AuthCallback] Login successful, redirecting to dashboard');
             toast.success("Welcome!", {
               description: `Signed in as ${result.user.name}`,
             });
             navigate("/", { replace: true });
           } else {
-            toast.error("Login Failed", { description: result.error });
+            console.error('[AuthCallback] Login failed:', result.error);
+            toast.error("Login Failed", { 
+              description: result.error || "Failed to complete login. Please try again.",
+              duration: 8000 
+            });
             navigate("/login", { replace: true });
           }
         } catch (error) {
-          console.error("Token auth error:", error);
-          toast.error("Authentication failed");
+          console.error("[AuthCallback] Token auth error:", error);
+          toast.error("Authentication failed", {
+            description: error.message || "An unexpected error occurred. Please try again.",
+            duration: 8000
+          });
           navigate("/login", { replace: true });
         }
         return;
@@ -70,28 +116,44 @@ export const AuthCallback = () => {
 
       if (sessionId) {
         // Legacy Emergent auth flow
+        console.log('[AuthCallback] Processing legacy session ID');
         try {
           const result = await loginWithGoogle(sessionId);
 
+          console.log('[AuthCallback] loginWithGoogle result:', result);
+
           if (result.success) {
+            console.log('[AuthCallback] Login successful, redirecting to dashboard');
             toast.success("Welcome!", {
               description: `Signed in as ${result.user.name}`,
             });
             navigate("/", { replace: true, state: { user: result.user } });
           } else {
-            toast.error("Login Failed", { description: result.error });
+            console.error('[AuthCallback] Login failed:', result.error);
+            toast.error("Login Failed", { 
+              description: result.error || "Failed to complete login. Please try again.",
+              duration: 8000 
+            });
             navigate("/login", { replace: true });
           }
         } catch (error) {
-          console.error("Google auth callback error:", error);
-          toast.error("Authentication failed");
+          console.error("[AuthCallback] Google auth callback error:", error);
+          toast.error("Authentication failed", {
+            description: error.message || "An unexpected error occurred. Please try again.",
+            duration: 8000
+          });
           navigate("/login", { replace: true });
         }
         return;
       }
 
       // No token or session_id found
-      toast.error("Invalid authentication callback");
+      console.error('[AuthCallback] No token or session_id found in URL');
+      console.error('[AuthCallback] Full URL:', window.location.href);
+      toast.error("Invalid authentication callback", {
+        description: "No authentication data found. Please try logging in again.",
+        duration: 8000
+      });
       navigate("/login", { replace: true });
     };
 
