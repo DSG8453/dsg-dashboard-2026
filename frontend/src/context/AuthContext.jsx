@@ -36,11 +36,22 @@ export const AuthProvider = ({ children }) => {
     if (!token) return;
     
     const connectWebSocket = () => {
-      // Get WebSocket URL from backend URL
-      const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
-      const wsProtocol = backendUrl.startsWith('https') ? 'wss' : 'ws';
-      const wsHost = backendUrl.replace(/^https?:\/\//, '').replace(/\/api$/, '');
-      const wsUrl = `${wsProtocol}://${wsHost}/ws/${token}`;
+      // Get WebSocket URL - use current host if REACT_APP_BACKEND_URL not set
+      const backendUrl = process.env.REACT_APP_BACKEND_URL;
+      let wsUrl;
+      
+      if (backendUrl) {
+        // Use configured backend URL
+        const wsProtocol = backendUrl.startsWith('https') ? 'wss' : 'ws';
+        const wsHost = backendUrl.replace(/^https?:\/\//, '').replace(/\/api$/, '');
+        wsUrl = `${wsProtocol}://${wsHost}/ws/${token}`;
+      } else {
+        // Use current window location (for Vercel proxy setup)
+        // Note: Vercel doesn't support WebSocket proxying, so we need direct backend URL
+        // For now, disable WebSocket when using Vercel proxy
+        console.log('[WS] WebSocket disabled - using Vercel proxy (no direct backend URL)');
+        return;
+      }
       
       try {
         wsRef.current = new WebSocket(wsUrl);
