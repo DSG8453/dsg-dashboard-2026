@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd frontend && npm install --legacy-peer-deps && npm run build",
-  "outputDirectory": "frontend/build",
-  "installCommand": "echo 'Dependencies installed during build'",
+  "buildCommand": "npm install --legacy-peer-deps && npm run build",
+  "outputDirectory": "build",
+  "installCommand": "echo 'Skip - dependencies installed in build command'",
   "framework": null,
   "rewrites": [
     {
