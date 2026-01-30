@@ -9,8 +9,6 @@ import { toast } from "sonner";
 import { Loader2, ArrowLeft, Shield, Mail, Lock, CheckCircle } from "lucide-react";
 
 export const LoginPage = () => {
-  console.log('[LoginPage] Component rendering');
-  
   const [isLoading, setIsLoading] = useState(false);
   const [showPasswordLogin, setShowPasswordLogin] = useState(false);
   const [email, setEmail] = useState("");
@@ -20,8 +18,6 @@ export const LoginPage = () => {
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  
-  console.log('[LoginPage] Auth state:', { isAuthenticated, authLoading });
 
   // Redirect authenticated users to dashboard
   useEffect(() => {
@@ -84,27 +80,12 @@ export const LoginPage = () => {
   };
 
   const handleGoogleLogin = async () => {
-    console.log('[LoginPage] *** GOOGLE LOGIN BUTTON CLICKED ***');
-    alert('Google login clicked - debug'); // Temporary debug alert
-    
     setIsLoading(true);
     
     try {
       // Direct Google OAuth - redirects to Google login page
-      // If REACT_APP_BACKEND_URL is not set, use relative path (Vercel will proxy)
-      const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
-      const loginUrl = `${backendUrl}/api/auth/google/login`;
-      
-      console.log('[LoginPage] Starting Google OAuth flow');
-      console.log('[LoginPage] Current location:', window.location.href);
-      console.log('[LoginPage] REACT_APP_BACKEND_URL:', backendUrl || '(not set - using relative path)');
-      console.log('[LoginPage] Redirecting to:', loginUrl);
-      
-      // For debugging: If backend URL looks wrong, warn the user
-      if (backendUrl && !backendUrl.startsWith('http')) {
-        console.warn('[LoginPage] WARNING: REACT_APP_BACKEND_URL should start with http:// or https://');
-      }
-      
+      // Uses relative path - Vercel proxies /api/* to the backend
+      const loginUrl = '/api/auth/google/login';
       window.location.href = loginUrl;
     } catch (error) {
       console.error('[LoginPage] Google login error:', error);
