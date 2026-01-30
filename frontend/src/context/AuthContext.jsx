@@ -121,7 +121,7 @@ export const AuthProvider = ({ children }) => {
         wsRef.current.close(1000);
       }
     };
-  }, [token, logout, TOKEN_REFRESH_INTERVAL]);
+  }, [token, logout]);
 
   // Token auto-refresh effect - keeps token fresh to prevent expiry
   useEffect(() => {
@@ -177,7 +177,7 @@ export const AuthProvider = ({ children }) => {
         clearInterval(tokenRefreshIntervalRef.current);
       }
     };
-  }, [token, logout]);
+  }, [token, logout, TOKEN_REFRESH_INTERVAL]);
 
   // Register device and check approval status
   const registerDevice = useCallback(async (currentUser) => {
