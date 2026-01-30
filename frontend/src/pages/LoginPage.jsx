@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { Loader2, ArrowLeft, Shield, Mail, Lock, CheckCircle } from "lucide-react";
 
 export const LoginPage = () => {
+  console.log('[LoginPage] Component rendering');
+  
   const [isLoading, setIsLoading] = useState(false);
   const [showPasswordLogin, setShowPasswordLogin] = useState(false);
   const [email, setEmail] = useState("");
@@ -18,6 +20,8 @@ export const LoginPage = () => {
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  
+  console.log('[LoginPage] Auth state:', { isAuthenticated, authLoading });
 
   // Redirect authenticated users to dashboard
   useEffect(() => {
@@ -80,11 +84,14 @@ export const LoginPage = () => {
   };
 
   const handleGoogleLogin = async () => {
+    console.log('[LoginPage] *** GOOGLE LOGIN BUTTON CLICKED ***');
+    alert('Google login clicked - debug'); // Temporary debug alert
+    
     setIsLoading(true);
     
     try {
       // Direct Google OAuth - redirects to Google login page
-      // If REACT_APP_BACKEND_URL is not set, use relative path (nginx will proxy)
+      // If REACT_APP_BACKEND_URL is not set, use relative path (Vercel will proxy)
       const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
       const loginUrl = `${backendUrl}/api/auth/google/login`;
       
