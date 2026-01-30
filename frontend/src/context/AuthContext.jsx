@@ -177,6 +177,8 @@ export const AuthProvider = ({ children }) => {
         clearInterval(tokenRefreshIntervalRef.current);
       }
     };
+    // TOKEN_REFRESH_INTERVAL is a constant, doesn't need to be in deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, logout]);
 
   // Register device and check approval status

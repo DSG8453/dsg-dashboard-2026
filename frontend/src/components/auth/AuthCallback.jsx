@@ -158,7 +158,7 @@ export const AuthCallback = () => {
     };
 
     processSession();
-  }, [location.hash, loginWithGoogle, loginWithToken, navigate]);
+  }, [location.hash, location.search, loginWithGoogle, loginWithToken, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-dsg flex items-center justify-center">
