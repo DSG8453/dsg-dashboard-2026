@@ -1,9 +1,12 @@
 // DSG Transport Secure Login - Background Service Worker
-// SECURITY: Credentials are encrypted and decrypted only within the extension
-// Users NEVER see credentials - they are auto-filled directly into forms
+// HIDDEN TAB LOGIN: User never sees login page - it happens in background
+// Credentials are encrypted and never visible to users
 
 // Store pending login data
 let pendingLogins = {};
+
+// Track tabs waiting for login completion
+let hiddenLoginTabs = {};
 
 // Listen for messages from DSG Transport dashboard (external)
 chrome.runtime.onMessageExternal.addListener(
@@ -18,15 +21,15 @@ chrome.runtime.onMessageExternal.addListener(
       } catch (e) {}
     }
     
-    // NEW: Secure login with encrypted payload
+    // NEW: Secure login with HIDDEN TAB (user never sees login page)
     if (request.action === 'DSG_SECURE_LOGIN') {
-      handleSecureLogin(request, sendResponse);
+      handleHiddenTabLogin(request, sendResponse);
       return true; // Keep channel open for async response
     }
     
-    // Legacy support (will be removed)
+    // Legacy support
     if (request.action === 'DSG_AUTO_LOGIN') {
-      handleAutoLogin(request, sendResponse);
+      handleHiddenTabLogin(request, sendResponse);
       return true;
     }
     
@@ -35,7 +38,8 @@ chrome.runtime.onMessageExternal.addListener(
         installed: true, 
         version: chrome.runtime.getManifest().version,
         ready: true,
-        secure: true // Indicates this version supports encrypted payloads
+        secure: true,
+        hiddenLogin: true // Indicates this version supports hidden tab login
       });
       return true;
     }
@@ -51,7 +55,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.storage.local.get('pendingLogin', (data) => {
       const pending = data.pendingLogin;
       if (pending && isUrlMatch(pending.url, sender.tab?.url)) {
-        sendResponse(pending);
+        // Include the tab ID so content script knows this is its login
+        sendResponse({ ...pending, tabId: sender.tab?.id });
         // Clear after sending to content script
         chrome.storage.local.remove('pendingLogin');
       } else {
@@ -68,92 +73,163 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   
+  // LOGIN COMPLETE - Show the hidden tab!
   if (request.action === 'LOGIN_SUCCESS') {
+    const tabId = sender.tab?.id;
+    if (tabId && hiddenLoginTabs[tabId]) {
+      // Login successful - now show the tab to user
+      chrome.tabs.update(tabId, { active: true }, () => {
+        // Clean up
+        delete hiddenLoginTabs[tabId];
+      });
+    }
     sendResponse({ acknowledged: true });
+    return true;
   }
   
   if (request.action === 'LOGIN_FAILED') {
+    const tabId = sender.tab?.id;
+    if (tabId && hiddenLoginTabs[tabId]) {
+      // Login failed - still show tab so user can login manually
+      chrome.tabs.update(tabId, { active: true });
+      delete hiddenLoginTabs[tabId];
+    }
     console.warn('[DSG] Login failed:', request.reason);
     sendResponse({ acknowledged: true });
+    return true;
+  }
+  
+  // Page navigated (likely after successful login)
+  if (request.action === 'PAGE_NAVIGATED') {
+    const tabId = sender.tab?.id;
+    if (tabId && hiddenLoginTabs[tabId]) {
+      // Check if we're now on a different page (post-login)
+      const loginUrl = hiddenLoginTabs[tabId].loginUrl;
+      const currentUrl = sender.tab?.url;
+      
+      // If URL changed significantly, login probably succeeded
+      if (currentUrl && loginUrl && !currentUrl.includes('login') && currentUrl !== loginUrl) {
+        chrome.tabs.update(tabId, { active: true });
+        delete hiddenLoginTabs[tabId];
+      }
+    }
+    sendResponse({ acknowledged: true });
+    return true;
   }
   
   return false;
 });
 
-// NEW: Handle secure login with encrypted payload
-async function handleSecureLogin(request, sendResponse) {
+// NEW: Handle secure login with HIDDEN TAB
+async function handleHiddenTabLogin(request, sendResponse) {
   try {
-    // Get the backend URL dynamically (captured from sender origin)
     const backendUrl = getDynamicBackendUrl();
     
-    let decryptResponse;
-    try {
-      decryptResponse = await fetch(backendUrl + '/api/secure-access/decrypt-payload', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Origin': chrome.runtime.getURL('')
-        },
-        body: JSON.stringify({
-          encrypted: request.encryptedPayload
-        })
-      });
-    } catch (fetchError) {
-      console.error('[DSG] Network error:', fetchError.message);
-      throw new Error('Network error calling decrypt API: ' + fetchError.message);
+    let username, password, usernameField, passwordField;
+    
+    // Check if we have encrypted payload (new secure method)
+    if (request.encryptedPayload) {
+      // Decrypt credentials from backend
+      let decryptResponse;
+      try {
+        decryptResponse = await fetch(backendUrl + '/api/secure-access/decrypt-payload', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Origin': chrome.runtime.getURL('')
+          },
+          body: JSON.stringify({
+            encrypted: request.encryptedPayload
+          })
+        });
+      } catch (fetchError) {
+        console.error('[DSG] Network error:', fetchError.message);
+        throw new Error('Network error: ' + fetchError.message);
+      }
+      
+      if (!decryptResponse.ok) {
+        const errorText = await decryptResponse.text();
+        throw new Error('Decrypt failed: ' + errorText);
+      }
+      
+      const decrypted = await decryptResponse.json();
+      
+      if (!decrypted.success || !decrypted.u || !decrypted.p) {
+        throw new Error(decrypted.error || 'Decryption failed');
+      }
+      
+      username = decrypted.u;
+      password = decrypted.p;
+      usernameField = request.usernameField || decrypted.uf || 'username';
+      passwordField = request.passwordField || decrypted.pf || 'password';
+    } else {
+      // Legacy: credentials passed directly
+      username = request.username;
+      password = request.password;
+      usernameField = request.usernameField || 'username';
+      passwordField = request.passwordField || 'password';
     }
     
-    if (!decryptResponse.ok) {
-      const errorText = await decryptResponse.text();
-      console.error('[DSG] Decrypt error:', errorText);
-      throw new Error('Decrypt API returned ' + decryptResponse.status + ': ' + errorText);
+    if (!username || !password) {
+      throw new Error('Missing credentials');
     }
     
-    const decrypted = await decryptResponse.json();
-    
-    if (!decrypted.success) {
-      throw new Error(decrypted.error || 'Decryption failed - check EXTENSION_KEY env variable');
-    }
-    
-    if (!decrypted.u || !decrypted.p) {
-      throw new Error('Decrypted payload missing username or password');
-    }
-    
-    // Store login data temporarily (credentials in memory only)
+    // Store login data
     const loginData = {
       url: request.loginUrl,
-      username: decrypted.u,
-      password: decrypted.p,
-      usernameField: request.usernameField || decrypted.uf || 'username',
-      passwordField: request.passwordField || decrypted.pf || 'password',
+      username: username,
+      password: password,
+      usernameField: usernameField,
+      passwordField: passwordField,
       toolName: request.toolName,
       autoSubmit: true,
+      hiddenLogin: true, // Flag for hidden tab mode
       timestamp: Date.now()
     };
     
-    // Store the pending login
     await chrome.storage.local.set({ pendingLogin: loginData });
     
-    // Open the login URL in a new tab
+    // HIDDEN TAB: Open tab in background (user doesn't see it)
     const tab = await chrome.tabs.create({ 
       url: request.loginUrl,
-      active: true
+      active: false,  // KEY: Tab opens in background, not visible
+      pinned: false
     });
     
-    // Clear credentials from memory after they're used
+    // Track this tab for showing after login
+    hiddenLoginTabs[tab.id] = {
+      loginUrl: request.loginUrl,
+      toolName: request.toolName,
+      createdAt: Date.now()
+    };
+    
+    // Set a timeout - if login doesn't complete in 15 seconds, show tab anyway
+    setTimeout(() => {
+      if (hiddenLoginTabs[tab.id]) {
+        chrome.tabs.get(tab.id, (t) => {
+          if (!chrome.runtime.lastError && t) {
+            chrome.tabs.update(tab.id, { active: true });
+          }
+        });
+        delete hiddenLoginTabs[tab.id];
+      }
+    }, 15000);
+    
+    // Clear credentials from memory
     setTimeout(() => {
       loginData.username = null;
       loginData.password = null;
-    }, 15000);
+    }, 10000);
     
     sendResponse({ 
       success: true, 
       tabId: tab.id,
-      message: 'Auto-login initiated'
+      message: 'Hidden login initiated - tab will appear when ready',
+      hiddenLogin: true
     });
     
   } catch (error) {
-    console.error('[DSG] Secure login error:', error.message);
+    console.error('[DSG] Hidden login error:', error.message);
     sendResponse({ 
       success: false, 
       error: error.message 
@@ -161,58 +237,11 @@ async function handleSecureLogin(request, sendResponse) {
   }
 }
 
-// Legacy: Handle auto-login request (for backwards compatibility)
-async function handleAutoLogin(request, sendResponse) {
-  try {
-    const loginData = {
-      url: request.loginUrl,
-      username: request.username,
-      password: request.password,
-      usernameField: request.usernameField || 'username',
-      passwordField: request.passwordField || 'password',
-      toolName: request.toolName,
-      timestamp: Date.now()
-    };
-    
-    // Store the pending login
-    await chrome.storage.local.set({ pendingLogin: loginData });
-    
-    // Open the login URL in a new tab
-    const tab = await chrome.tabs.create({ 
-      url: request.loginUrl,
-      active: true
-    });
-    
-    sendResponse({ 
-      success: true, 
-      tabId: tab.id,
-      message: 'Login page opened, credentials will auto-fill'
-    });
-    
-  } catch (error) {
-    console.error('[DSG] Auto-login error:', error.message);
-    sendResponse({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-}
-
-// Get backend URL dynamically from the page that triggered the login
+// Get backend URL dynamically
 function getBackendUrl() {
-  const fallbackUrls = [
-    'https://portal.dsgtransport.net',
-    'https://api.portal.dsgtransport.net',
-    'https://secure.dsgtransport.net',
-    'https://app.dsgtransport.net', 
-    'https://secure.dsgtransport.com',
-    'https://app.dsgtransport.com'
-  ];
-  
-  return fallbackUrls[0];
+  return 'https://portal.dsgtransport.net';
 }
 
-// Store the backend URL when we receive a message from the dashboard
 let dynamicBackendUrl = null;
 
 function setBackendUrl(url) {
@@ -225,33 +254,21 @@ function getDynamicBackendUrl() {
   return dynamicBackendUrl || getBackendUrl();
 }
 
-// Check if two URLs match (same domain or URL contains pending URL domain)
+// Check if two URLs match
 function isUrlMatch(pendingUrl, currentUrl) {
-  if (!pendingUrl || !currentUrl) {
-    return false;
-  }
+  if (!pendingUrl || !currentUrl) return false;
   
   try {
     const pending = new URL(pendingUrl);
     const current = new URL(currentUrl);
     
-    // Exact hostname match
-    if (pending.hostname === current.hostname) {
-      return true;
-    }
+    if (pending.hostname === current.hostname) return true;
     
-    // Check if same domain (ignoring subdomain)
     const pendingDomain = pending.hostname.split('.').slice(-2).join('.');
     const currentDomain = current.hostname.split('.').slice(-2).join('.');
     
-    if (pendingDomain === currentDomain) {
-      return true;
-    }
-    
-    // Check if current URL hostname contains pending domain
-    if (current.hostname.includes(pending.hostname) || pending.hostname.includes(current.hostname)) {
-      return true;
-    }
+    if (pendingDomain === currentDomain) return true;
+    if (current.hostname.includes(pending.hostname) || pending.hostname.includes(current.hostname)) return true;
     
     return false;
   } catch (e) {
@@ -259,24 +276,45 @@ function isUrlMatch(pendingUrl, currentUrl) {
   }
 }
 
-// Clean up expired login data periodically (every minute)
+// Clean up expired data periodically
 setInterval(() => {
+  // Clean expired pending logins
   chrome.storage.local.get('pendingLogin', (data) => {
     if (data.pendingLogin) {
       const age = Date.now() - data.pendingLogin.timestamp;
-      // Expire after 2 minutes (shorter for security)
       if (age > 2 * 60 * 1000) {
         chrome.storage.local.remove('pendingLogin');
       }
     }
   });
+  
+  // Clean expired hidden tab trackers
+  const now = Date.now();
+  for (const tabId in hiddenLoginTabs) {
+    if (now - hiddenLoginTabs[tabId].createdAt > 60000) {
+      delete hiddenLoginTabs[tabId];
+    }
+  }
 }, 30000);
 
-// Listen for tab updates to inject content script when needed
+// Listen for tab navigation to detect post-login redirects
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url) {
-    chrome.storage.local.get('pendingLogin', (data) => {
-      // Content script handles the rest
-    });
+  if (changeInfo.status === 'complete' && hiddenLoginTabs[tabId]) {
+    const loginUrl = hiddenLoginTabs[tabId].loginUrl;
+    const currentUrl = tab.url;
+    
+    // If URL changed from login page, show the tab
+    if (currentUrl && loginUrl) {
+      try {
+        const loginHost = new URL(loginUrl).hostname;
+        const currentHost = new URL(currentUrl).hostname;
+        
+        // Same domain but different page = probably logged in
+        if (loginHost === currentHost && currentUrl !== loginUrl && !currentUrl.toLowerCase().includes('login')) {
+          chrome.tabs.update(tabId, { active: true });
+          delete hiddenLoginTabs[tabId];
+        }
+      } catch (e) {}
+    }
   }
 });

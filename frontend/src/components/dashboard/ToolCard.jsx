@@ -272,11 +272,20 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
               }
               
               if (extResponse && extResponse.success) {
-                toast.success(`Signing into ${tool.name}`, {
-                  description: "Auto-login in progress - you'll be signed in automatically",
-                  icon: <Shield className="h-4 w-4" />,
-                  duration: 4000,
-                });
+                // Check if using new hidden login mode
+                if (extResponse.hiddenLogin) {
+                  toast.success(`Connecting to ${tool.name}...`, {
+                    description: "Logging you in securely. Tab will appear when ready.",
+                    icon: <Shield className="h-4 w-4" />,
+                    duration: 5000,
+                  });
+                } else {
+                  toast.success(`Signing into ${tool.name}`, {
+                    description: "Auto-login in progress",
+                    icon: <Shield className="h-4 w-4" />,
+                    duration: 4000,
+                  });
+                }
                 setIsAccessingTool(false);
               } else {
                 // Extension responded but failed - try fallback

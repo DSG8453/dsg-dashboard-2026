@@ -1,13 +1,14 @@
 // DSG Transport Secure Login - Content Script
-// Auto-fills credentials AND auto-clicks login button for seamless access
+// HIDDEN TAB LOGIN: Fills credentials in background tab, user never sees login page
 
 (function() {
   'use strict';
   
-  // Show loading overlay immediately if we have pending login
-  let loadingOverlay = null;
+  // Track if we've already processed login
+  let loginProcessed = false;
+  let isHiddenMode = false;
   
-  // Wait for page to be ready, then check for pending login
+  // Wait for page to be ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initAutoFill);
   } else {
@@ -15,27 +16,24 @@
   }
   
   function initAutoFill() {
-    // Check for pending login and fill immediately if found
+    // Check for pending login
     chrome.runtime.sendMessage({ action: 'GET_PENDING_LOGIN' }, (pending) => {
-      if (chrome.runtime.lastError) {
-        return;
-      }
+      if (chrome.runtime.lastError) return;
       
-      if (pending) {
-        // Show loading overlay
-        showLoadingOverlay(pending.toolName);
+      if (pending && !loginProcessed) {
+        loginProcessed = true;
+        isHiddenMode = pending.hiddenLogin === true;
         
-        // Fill credentials directly with the data we have
+        // In hidden mode, skip the overlay (tab is not visible anyway)
         fillCredentialsWithData(pending);
       }
     });
   }
   
-  // Fill credentials with provided data (doesn't fetch from storage again)
+  // Fill credentials
   function fillCredentialsWithData(creds) {
-    // Try multiple times with delays
     let attempts = 0;
-    const maxAttempts = 10;
+    const maxAttempts = 15; // More attempts for hidden mode
     
     const tryFill = () => {
       attempts++;
@@ -54,275 +52,113 @@
         setTimeout(() => {
           fillField(passwordInput, creds.password);
           
-          // Auto-click login button with enhanced submission
+          // Submit the form
           setTimeout(() => {
             const loginButton = findLoginButton();
             if (loginButton) {
-              // Use enhanced submit that bypasses password save
               submitFormStealthily(usernameInput, passwordInput, loginButton, creds);
-              
-              setTimeout(hideLoadingOverlay, 1500);
             } else {
-              showNotification('✅ Credentials filled - Click login to continue', 'success');
-              hideLoadingOverlay();
+              // No button found - try form submit
+              const form = usernameInput.closest('form') || passwordInput.closest('form');
+              if (form) {
+                try {
+                  form.submit();
+                  notifyLoginSuccess(creds.toolName);
+                } catch (e) {
+                  notifyLoginFailed('Could not submit form');
+                }
+              } else {
+                notifyLoginFailed('No login button found');
+              }
             }
           }, 300);
         }, 200);
         
-        return; // Success!
+        return;
       }
       
-      // Retry if not at max attempts
+      // Retry
       if (attempts < maxAttempts) {
         setTimeout(tryFill, 500);
       } else {
-        showNotification('⚠️ Could not find login fields. Please login manually.', 'warning');
-        hideLoadingOverlay();
+        notifyLoginFailed('Could not find login fields');
       }
     };
     
     // Start trying after page settles
-    setTimeout(tryFill, 500);
+    setTimeout(tryFill, 300);
   }
   
-  function showLoadingOverlay(toolName) {
-    if (loadingOverlay) return; // Already showing
-    
-    loadingOverlay = document.createElement('div');
-    loadingOverlay.id = 'dsg-loading-overlay';
-    loadingOverlay.innerHTML = `
-      <div class="dsg-loading-content">
-        <div class="dsg-loading-spinner"></div>
-        <div class="dsg-loading-logo">🔐 DSG Transport</div>
-        <div class="dsg-loading-text">Signing you into ${toolName || 'tool'}...</div>
-        <div class="dsg-loading-subtext">Please wait, this only takes a moment</div>
-      </div>
-    `;
-    
-    loadingOverlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 2147483647;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    `;
-    
-    // Add styles
-    const style = document.createElement('style');
-    style.id = 'dsg-loading-styles';
-    style.textContent = `
-      .dsg-loading-content {
-        text-align: center;
-        color: white;
-        font-family: system-ui, -apple-system, sans-serif;
-      }
-      .dsg-loading-spinner {
-        width: 50px;
-        height: 50px;
-        border: 4px solid rgba(255,255,255,0.2);
-        border-top-color: #3b82f6;
-        border-radius: 50%;
-        animation: dsg-spin 1s linear infinite;
-        margin: 0 auto 20px;
-      }
-      .dsg-loading-logo {
-        font-size: 24px;
-        font-weight: 700;
-        margin-bottom: 16px;
-        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-      }
-      .dsg-loading-text {
-        font-size: 18px;
-        font-weight: 500;
-        margin-bottom: 8px;
-      }
-      .dsg-loading-subtext {
-        font-size: 14px;
-        color: #94a3b8;
-      }
-      @keyframes dsg-spin {
-        to { transform: rotate(360deg); }
-      }
-    `;
-    
-    document.head.appendChild(style);
-    document.body.appendChild(loadingOverlay);
-    
-    // Fade in
-    requestAnimationFrame(() => {
-      loadingOverlay.style.opacity = '1';
+  // Notify background that login succeeded - this will show the hidden tab
+  function notifyLoginSuccess(toolName) {
+    chrome.runtime.sendMessage({ 
+      action: 'LOGIN_SUCCESS', 
+      toolName: toolName 
     });
   }
   
-  function hideLoadingOverlay() {
-    if (loadingOverlay) {
-      loadingOverlay.style.opacity = '0';
-      setTimeout(() => {
-        loadingOverlay?.remove();
-        document.getElementById('dsg-loading-styles')?.remove();
-        loadingOverlay = null;
-      }, 300);
-    }
-  }
-  
-  function checkAndFillCredentials() {
-    chrome.runtime.sendMessage({ action: 'GET_PENDING_LOGIN' }, (pending) => {
-      if (chrome.runtime.lastError) {
-        hideLoadingOverlay();
-        return;
-      }
-      
-      if (!pending) {
-        hideLoadingOverlay();
-        return;
-      }
-      
-      // Check if credentials are still fresh (< 5 minutes)
-      if (Date.now() - pending.timestamp > 5 * 60 * 1000) {
-        chrome.runtime.sendMessage({ action: 'CLEAR_PENDING_LOGIN' });
-        hideLoadingOverlay();
-        return;
-      }
-      
-      // Try to fill credentials
-      fillCredentials(pending);
+  // Notify background that login failed
+  function notifyLoginFailed(reason) {
+    chrome.runtime.sendMessage({ 
+      action: 'LOGIN_FAILED', 
+      reason: reason 
     });
   }
   
-  function fillCredentials(creds) {
-    const usernameInput = findUsernameField(creds.usernameField);
-    const passwordInput = findPasswordField(creds.passwordField);
-    
-    if (usernameInput && passwordInput) {
-      // IMPORTANT: Disable Chrome's password save prompt
-      disablePasswordSavePrompt(usernameInput, passwordInput);
-      
-      // Fill username
-      fillField(usernameInput, creds.username);
-      
-      // Small delay before filling password
-      setTimeout(() => {
-        fillField(passwordInput, creds.password);
-        
-        // Clear pending login immediately
-        chrome.runtime.sendMessage({ action: 'CLEAR_PENDING_LOGIN' });
-        
-        // Auto-click login button after a brief delay (stealth mode)
-        setTimeout(() => {
-          const loginButton = findLoginButton();
-          if (loginButton) {
-            // Use stealth submission to bypass password save prompt
-            submitFormStealthily(usernameInput, passwordInput, loginButton, creds);
-            
-            // Hide overlay after a short delay (let the page redirect)
-            setTimeout(hideLoadingOverlay, 1500);
-            
-          } else {
-            showNotification('✅ Credentials filled - Click login to continue', 'success');
-            hideLoadingOverlay();
-            
-            chrome.runtime.sendMessage({ 
-              action: 'LOGIN_SUCCESS', 
-              toolName: creds.toolName 
-            });
-          }
-        }, 300);
-        
-      }, 200);
-      
-    } else {
-      // Retry a few times with increasing delays
-      retryFillCredentials(creds, 1);
-    }
-  }
-  
-  // Submit form in a way that bypasses Chrome's password save detection
+  // Submit form stealthily (bypass password save prompts)
   function submitFormStealthily(usernameInput, passwordInput, loginButton, creds) {
     const form = usernameInput.closest('form') || passwordInput.closest('form');
     
-    // Store original field names
+    // Store original names
     const originalUserName = usernameInput.name;
     const originalPassName = passwordInput.name;
-    const originalUserAuto = usernameInput.getAttribute('autocomplete');
-    const originalPassAuto = passwordInput.getAttribute('autocomplete');
     
-    // Temporarily scramble field names to prevent Chrome from recognizing login form
+    // Scramble field names to prevent Chrome password save
     const scrambledSuffix = `_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    
-    // Method A: Change field names temporarily
     usernameInput.name = 'field_a' + scrambledSuffix;
     passwordInput.name = 'field_b' + scrambledSuffix;
-    
-    // Method B: Set aggressive autocomplete values
     usernameInput.setAttribute('autocomplete', 'off');
     passwordInput.setAttribute('autocomplete', 'new-password');
     
-    // Method C: Remove any data Chrome uses to detect login forms
     if (form) {
       form.setAttribute('autocomplete', 'off');
     }
     
-    // Use requestAnimationFrame to ensure DOM updates are processed
+    // Click login button
     requestAnimationFrame(() => {
-      // Click the login button
       loginButton.click();
       
-      // Also try direct form submission as backup
+      // Notify success (tab will be shown after navigation)
+      notifyLoginSuccess(creds.toolName);
+      
+      // Backup: try form submit if click didn't work
       if (form) {
         setTimeout(() => {
-          // Only submit if page hasn't navigated
           if (document.contains(loginButton)) {
             try {
-              // Try modern requestSubmit first (respects validation)
               if (form.requestSubmit) {
                 form.requestSubmit(loginButton);
               } else {
                 form.submit();
               }
-            } catch (e) {
-              // Silent fail - button click should work
-            }
+            } catch (e) {}
           }
         }, 300);
       }
       
-      // Restore original names after form is processed (for any validation errors)
+      // Restore names
       setTimeout(() => {
-        if (document.contains(usernameInput)) {
-          usernameInput.name = originalUserName;
-          if (originalUserAuto) usernameInput.setAttribute('autocomplete', originalUserAuto);
-        }
-        if (document.contains(passwordInput)) {
-          passwordInput.name = originalPassName;
-          if (originalPassAuto) passwordInput.setAttribute('autocomplete', originalPassAuto);
-        }
+        if (document.contains(usernameInput)) usernameInput.name = originalUserName;
+        if (document.contains(passwordInput)) passwordInput.name = originalPassName;
       }, 500);
-    });
-    
-    // Report success
-    chrome.runtime.sendMessage({ 
-      action: 'LOGIN_SUCCESS', 
-      toolName: creds.toolName 
     });
   }
   
-  // Find the login/submit button
+  // Find login button
   function findLoginButton() {
     const buttonSelectors = [
-      // Standard buttons
       'button[type="submit"]',
       'input[type="submit"]',
-      // ID/Name based
       'button[id*="login" i]',
       'button[id*="signin" i]',
       'button[id*="submit" i]',
@@ -330,7 +166,6 @@
       'input[id*="submit" i]',
       'button[name*="login" i]',
       'button[name*="submit" i]',
-      // Class based
       'button[class*="login" i]',
       'button[class*="signin" i]',
       'button[class*="submit" i]',
@@ -339,19 +174,15 @@
       '.submit-button',
       '.btn-login',
       '.btn-signin',
-      // ASP.NET specific
       'input[name*="btnLogin" i]',
       'input[name*="btnSubmit" i]',
       'input[id*="btnLogin" i]',
-      // Generic form button
       'form button:not([type="button"])',
       'form input[type="image"]',
-      // Links styled as buttons
       'a[class*="login" i]',
       'a[class*="signin" i]',
     ];
     
-    // First try standard selectors
     for (const selector of buttonSelectors) {
       try {
         const elements = document.querySelectorAll(selector);
@@ -363,7 +194,7 @@
       } catch (e) {}
     }
     
-    // Try text-based search for buttons
+    // Text-based search
     const allButtons = document.querySelectorAll('button, input[type="submit"], input[type="button"], a.btn, a.button');
     const loginKeywords = ['sign in', 'signin', 'log in', 'login', 'submit', 'continue', 'enter', 'next', 'go'];
     
@@ -380,7 +211,7 @@
       }
     }
     
-    // Last resort: find any submit button in a form with password field
+    // Last resort: submit button in form with password
     const forms = document.querySelectorAll('form');
     for (const form of forms) {
       if (form.querySelector('input[type="password"]')) {
@@ -394,70 +225,43 @@
     return null;
   }
   
-  // Check if element looks like a login button
   function isLikelyLoginButton(el) {
     const text = (el.textContent || el.value || '').toLowerCase();
     const skipKeywords = ['forgot', 'reset', 'register', 'signup', 'sign up', 'create', 'cancel', 'back'];
-    
     for (const skip of skipKeywords) {
       if (text.includes(skip)) return false;
     }
-    
     return true;
   }
   
-  // Prevent Chrome from showing "Save Password?" prompt
+  // Prevent password save prompt
   function disablePasswordSavePrompt(usernameInput, passwordInput) {
-    // Method 1: Randomize field names to confuse password managers
     const randomSuffix = `_dsg_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    const originalUserName = usernameInput.name;
-    const originalPassName = passwordInput.name;
     
-    // Method 2: Set autocomplete attributes aggressively
+    // Set autocomplete attributes
     usernameInput.setAttribute('autocomplete', 'off');
-    usernameInput.setAttribute('data-lpignore', 'true'); // LastPass ignore
-    usernameInput.setAttribute('data-form-type', 'other'); // Generic form type
-    usernameInput.setAttribute('data-1p-ignore', 'true'); // 1Password ignore
-    usernameInput.setAttribute('data-bwignore', 'true'); // Bitwarden ignore
+    usernameInput.setAttribute('data-lpignore', 'true');
+    usernameInput.setAttribute('data-1p-ignore', 'true');
+    usernameInput.setAttribute('data-bwignore', 'true');
     
     passwordInput.setAttribute('autocomplete', 'new-password');
     passwordInput.setAttribute('data-lpignore', 'true');
-    passwordInput.setAttribute('data-form-type', 'other');
     passwordInput.setAttribute('data-1p-ignore', 'true');
     passwordInput.setAttribute('data-bwignore', 'true');
     
-    // Method 3: Find and modify the parent form
     const form = usernameInput.closest('form') || passwordInput.closest('form');
     if (form) {
       form.setAttribute('autocomplete', 'off');
       form.setAttribute('data-lpignore', 'true');
-      form.setAttribute('data-turbo', 'false'); // Disable Turbo submit
-      
-      // Method 4: Temporarily change field names before submit
-      const preventSaveHandler = function(e) {
-        usernameInput.name = 'dsg_user' + randomSuffix;
-        passwordInput.name = 'dsg_pass' + randomSuffix;
-        passwordInput.setAttribute('autocomplete', 'new-password');
-        
-        setTimeout(() => {
-          usernameInput.name = originalUserName;
-          passwordInput.name = originalPassName;
-        }, 100);
-      };
-      
-      form.addEventListener('submit', preventSaveHandler, true);
     }
     
-    // Method 5: Create hidden dummy fields BEFORE the real fields
+    // Dummy fields to confuse password managers
     const dummyContainer = document.createElement('div');
-    dummyContainer.id = 'dsg-dummy-fields';
     dummyContainer.setAttribute('aria-hidden', 'true');
     dummyContainer.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;';
     dummyContainer.innerHTML = `
       <input type="text" name="username" autocomplete="username" tabindex="-1">
       <input type="password" name="password" autocomplete="current-password" tabindex="-1">
-      <input type="text" name="email" autocomplete="email" tabindex="-1">
-      <input type="password" name="pwd" autocomplete="current-password" tabindex="-1">
     `;
     
     if (form) {
@@ -466,67 +270,17 @@
       document.body.insertBefore(dummyContainer, document.body.firstChild);
     }
     
-    // Method 6: Convert password field temporarily to prevent detection
+    // Temporarily change password type
     const originalType = passwordInput.type;
     passwordInput.type = 'text';
-    passwordInput.setAttribute('data-dsg-real-type', 'password');
-    
-    // Method 7: Use readonly initially to prevent browser detection
     usernameInput.setAttribute('readonly', 'readonly');
     passwordInput.setAttribute('readonly', 'readonly');
     
-    // Remove readonly after a short delay
     setTimeout(() => {
       usernameInput.removeAttribute('readonly');
       passwordInput.removeAttribute('readonly');
       passwordInput.type = originalType;
     }, 100);
-  }
-  
-  function retryFillCredentials(creds, attempt) {
-    const maxAttempts = 5;
-    const delay = attempt * 1000;
-    
-    if (attempt > maxAttempts) {
-      showNotification('⚠️ Could not auto-fill. Please login manually.', 'warning');
-      hideLoadingOverlay();
-      chrome.runtime.sendMessage({ 
-        action: 'LOGIN_FAILED', 
-        reason: 'Could not find login fields',
-        toolName: creds.toolName 
-      });
-      return;
-    }
-    
-    setTimeout(() => {
-      const usernameInput = findUsernameField(creds.usernameField);
-      const passwordInput = findPasswordField(creds.passwordField);
-      
-      if (usernameInput && passwordInput) {
-        disablePasswordSavePrompt(usernameInput, passwordInput);
-        
-        fillField(usernameInput, creds.username);
-        setTimeout(() => {
-          fillField(passwordInput, creds.password);
-          
-          chrome.runtime.sendMessage({ action: 'CLEAR_PENDING_LOGIN' });
-          
-          setTimeout(() => {
-            const loginButton = findLoginButton();
-            if (loginButton) {
-              submitFormStealthily(usernameInput, passwordInput, loginButton, creds);
-              setTimeout(hideLoadingOverlay, 1500);
-            } else {
-              showNotification('✅ Credentials filled - Click login to continue', 'success');
-              hideLoadingOverlay();
-              chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS', toolName: creds.toolName });
-            }
-          }, 300);
-        }, 200);
-      } else {
-        retryFillCredentials(creds, attempt + 1);
-      }
-    }, delay);
   }
   
   function findUsernameField(preferredName) {
@@ -552,7 +306,6 @@
       'input[autocomplete="email"]',
       'input[placeholder*="email" i]',
       'input[placeholder*="user" i]',
-      'input[placeholder*="login" i]',
       'input[name="Email"]',
       'input[name="LOGIN_ID"]',
       'form input[type="text"]:first-of-type'
@@ -561,18 +314,14 @@
     for (const selector of selectors) {
       try {
         const input = document.querySelector(selector);
-        if (input && isVisible(input)) {
-          return input;
-        }
+        if (input && isVisible(input)) return input;
       } catch (e) {}
     }
     
-    // Last resort: find any visible text input
+    // Fallback
     const allInputs = document.querySelectorAll('input[type="text"], input:not([type])');
     for (const input of allInputs) {
-      if (isVisible(input) && !input.type.includes('hidden')) {
-        return input;
-      }
+      if (isVisible(input) && !input.type.includes('hidden')) return input;
     }
     
     return null;
@@ -594,16 +343,13 @@
       'input[id*="pass" i]',
       'input[id*="pwd" i]',
       'input[autocomplete="current-password"]',
-      'input[autocomplete="password"]',
       'input[name="PASSWORD"]'
     ];
     
     for (const selector of selectors) {
       try {
         const input = document.querySelector(selector);
-        if (input && isVisible(input)) {
-          return input;
-        }
+        if (input && isVisible(input)) return input;
       } catch (e) {}
     }
     
@@ -612,7 +358,6 @@
   
   function isVisible(element) {
     if (!element) return false;
-    
     const style = window.getComputedStyle(element);
     return style.display !== 'none' && 
            style.visibility !== 'hidden' && 
@@ -623,25 +368,18 @@
   function fillField(element, value) {
     if (!element || !value) return;
     
-    // Focus the element
     element.focus();
-    
-    // Clear existing value
     element.value = '';
     
-    // Use native value setter for React/Angular/Vue compatibility
+    // Native value setter for React/Angular/Vue
     const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
       window.HTMLInputElement.prototype, 'value'
     ).set;
-    
     nativeInputValueSetter.call(element, value);
-    
-    // Also set directly
     element.value = value;
     
-    // Dispatch all necessary events
-    const events = ['input', 'change', 'blur', 'keydown', 'keyup', 'keypress'];
-    events.forEach(eventType => {
+    // Dispatch events
+    ['input', 'change', 'blur', 'keydown', 'keyup', 'keypress'].forEach(eventType => {
       let event;
       if (eventType.startsWith('key')) {
         event = new KeyboardEvent(eventType, { bubbles: true, cancelable: true });
@@ -650,86 +388,26 @@
       }
       element.dispatchEvent(event);
     });
-    
-    // Visual feedback - brief green highlight
-    const originalBg = element.style.backgroundColor;
-    const originalTransition = element.style.transition;
-    
-    element.style.transition = 'background-color 0.3s ease';
-    element.style.backgroundColor = '#dcfce7'; // Light green
-    
-    setTimeout(() => {
-      element.style.backgroundColor = originalBg || '';
-      element.style.transition = originalTransition || '';
-    }, 1000);
   }
   
-  function showNotification(message, type = 'info') {
-    // Remove any existing notification
-    const existing = document.getElementById('dsg-notification');
-    if (existing) existing.remove();
-    
-    const notification = document.createElement('div');
-    notification.id = 'dsg-notification';
-    notification.textContent = message;
-    
-    const bgColor = type === 'success' 
-      ? 'linear-gradient(135deg, #059669, #10b981)' 
-      : type === 'warning'
-        ? 'linear-gradient(135deg, #d97706, #f59e0b)'
-        : 'linear-gradient(135deg, #1e3a5f, #0f172a)';
-    
-    notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: ${bgColor};
-      color: white;
-      padding: 16px 24px;
-      border-radius: 12px;
-      font-family: system-ui, -apple-system, sans-serif;
-      font-size: 14px;
-      font-weight: 500;
-      z-index: 2147483647;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-      animation: dsgSlideIn 0.3s ease;
-    `;
-    
-    // Add animation keyframes if not exists
-    if (!document.getElementById('dsg-styles')) {
-      const style = document.createElement('style');
-      style.id = 'dsg-styles';
-      style.textContent = `
-        @keyframes dsgSlideIn {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes dsgSlideOut {
-          from { transform: translateX(0); opacity: 1; }
-          to { transform: translateX(100%); opacity: 0; }
-        }
-      `;
-      document.head.appendChild(style);
-    }
-    
-    document.body.appendChild(notification);
-    
-    // Remove after 3 seconds
-    setTimeout(() => {
-      notification.style.animation = 'dsgSlideOut 0.3s ease forwards';
-      setTimeout(() => notification.remove(), 300);
-    }, 3000);
-  }
-  
-  // Also listen for page navigation (SPA)
+  // Detect page navigation (post-login redirect)
   let lastUrl = window.location.href;
   const observer = new MutationObserver(() => {
     if (window.location.href !== lastUrl) {
       lastUrl = window.location.href;
-      setTimeout(checkAndFillCredentials, 1000);
+      // Notify background of navigation
+      chrome.runtime.sendMessage({ action: 'PAGE_NAVIGATED', url: lastUrl });
     }
   });
   
   observer.observe(document.body, { childList: true, subtree: true });
+  
+  // Also listen for actual navigation events
+  window.addEventListener('beforeunload', () => {
+    // Page is navigating - likely login succeeded
+    if (loginProcessed) {
+      chrome.runtime.sendMessage({ action: 'PAGE_NAVIGATED', url: 'navigating' });
+    }
+  });
   
 })();
