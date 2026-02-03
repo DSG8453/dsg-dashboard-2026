@@ -106,26 +106,45 @@
   }
   
   // Submit form stealthily (bypass password save prompts)
+  // STEALTH SUBMIT - Completely bypasses Chrome password save detection
   function submitFormStealthily(usernameInput, passwordInput, loginButton, creds) {
     const form = usernameInput.closest('form') || passwordInput.closest('form');
     
-    // Store original names
+    // Store originals
     const originalUserName = usernameInput.name;
     const originalPassName = passwordInput.name;
+    const originalUserId = usernameInput.id;
+    const originalPassId = passwordInput.id;
+    const originalUserAuto = usernameInput.getAttribute('autocomplete');
+    const originalPassAuto = passwordInput.getAttribute('autocomplete');
     
-    // Scramble field names to prevent Chrome password save
+    // STEP 1: Completely scramble all identifying attributes
     const scrambledSuffix = `_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    usernameInput.name = 'field_a' + scrambledSuffix;
-    passwordInput.name = 'field_b' + scrambledSuffix;
-    usernameInput.setAttribute('autocomplete', 'off');
-    passwordInput.setAttribute('autocomplete', 'new-password');
     
+    usernameInput.name = 'dsg_field_x' + scrambledSuffix;
+    usernameInput.id = 'dsg_id_x' + scrambledSuffix;
+    usernameInput.setAttribute('autocomplete', 'off');
+    usernameInput.setAttribute('data-form-type', 'other');
+    
+    passwordInput.name = 'dsg_field_y' + scrambledSuffix;
+    passwordInput.id = 'dsg_id_y' + scrambledSuffix;
+    passwordInput.setAttribute('autocomplete', 'new-password');
+    passwordInput.setAttribute('data-form-type', 'other');
+    passwordInput.type = 'text'; // Temporarily not a password field!
+    
+    // STEP 2: Modify form to look like non-login form
     if (form) {
       form.setAttribute('autocomplete', 'off');
+      form.setAttribute('data-turbo', 'false');
+      form.removeAttribute('action'); // Remove action temporarily
     }
     
-    // Click login button
+    // STEP 3: Submit with scrambled fields
     requestAnimationFrame(() => {
+      // Restore password type just before click (needed for validation)
+      passwordInput.type = 'password';
+      
+      // Click login button
       loginButton.click();
       
       // Notify success (tab will be shown after navigation)
@@ -146,10 +165,18 @@
         }, 300);
       }
       
-      // Restore names
+      // Restore original attributes (in case of validation error)
       setTimeout(() => {
-        if (document.contains(usernameInput)) usernameInput.name = originalUserName;
-        if (document.contains(passwordInput)) passwordInput.name = originalPassName;
+        if (document.contains(usernameInput)) {
+          usernameInput.name = originalUserName;
+          usernameInput.id = originalUserId;
+          if (originalUserAuto) usernameInput.setAttribute('autocomplete', originalUserAuto);
+        }
+        if (document.contains(passwordInput)) {
+          passwordInput.name = originalPassName;
+          passwordInput.id = originalPassId;
+          if (originalPassAuto) passwordInput.setAttribute('autocomplete', originalPassAuto);
+        }
       }, 500);
     });
   }
@@ -235,33 +262,56 @@
   }
   
   // Prevent password save prompt
+  // MAXIMUM PASSWORD SAVE PREVENTION - Multiple techniques combined
   function disablePasswordSavePrompt(usernameInput, passwordInput) {
     const randomSuffix = `_dsg_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const originalUserName = usernameInput.name;
+    const originalPassName = passwordInput.name;
     
-    // Set autocomplete attributes
+    // TECHNIQUE 1: Set autocomplete attributes aggressively
     usernameInput.setAttribute('autocomplete', 'off');
-    usernameInput.setAttribute('data-lpignore', 'true');
-    usernameInput.setAttribute('data-1p-ignore', 'true');
-    usernameInput.setAttribute('data-bwignore', 'true');
+    usernameInput.setAttribute('data-lpignore', 'true');  // LastPass
+    usernameInput.setAttribute('data-1p-ignore', 'true'); // 1Password
+    usernameInput.setAttribute('data-bwignore', 'true');  // Bitwarden
+    usernameInput.setAttribute('data-form-type', 'other');
     
     passwordInput.setAttribute('autocomplete', 'new-password');
     passwordInput.setAttribute('data-lpignore', 'true');
     passwordInput.setAttribute('data-1p-ignore', 'true');
     passwordInput.setAttribute('data-bwignore', 'true');
+    passwordInput.setAttribute('data-form-type', 'other');
     
+    // TECHNIQUE 2: Modify form attributes
     const form = usernameInput.closest('form') || passwordInput.closest('form');
     if (form) {
       form.setAttribute('autocomplete', 'off');
       form.setAttribute('data-lpignore', 'true');
+      form.setAttribute('data-turbo', 'false');
+      
+      // TECHNIQUE 3: Intercept form submit to scramble names
+      const preventSaveHandler = function(e) {
+        usernameInput.name = 'dsg_user' + randomSuffix;
+        passwordInput.name = 'dsg_pass' + randomSuffix;
+        passwordInput.setAttribute('autocomplete', 'new-password');
+        
+        setTimeout(() => {
+          if (document.contains(usernameInput)) usernameInput.name = originalUserName;
+          if (document.contains(passwordInput)) passwordInput.name = originalPassName;
+        }, 100);
+      };
+      form.addEventListener('submit', preventSaveHandler, true);
     }
     
-    // Dummy fields to confuse password managers
+    // TECHNIQUE 4: Dummy fields BEFORE real fields (password managers grab first match)
     const dummyContainer = document.createElement('div');
+    dummyContainer.id = 'dsg-dummy-fields';
     dummyContainer.setAttribute('aria-hidden', 'true');
     dummyContainer.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;';
     dummyContainer.innerHTML = `
       <input type="text" name="username" autocomplete="username" tabindex="-1">
       <input type="password" name="password" autocomplete="current-password" tabindex="-1">
+      <input type="text" name="email" autocomplete="email" tabindex="-1">
+      <input type="password" name="pwd" autocomplete="current-password" tabindex="-1">
     `;
     
     if (form) {
@@ -270,12 +320,20 @@
       document.body.insertBefore(dummyContainer, document.body.firstChild);
     }
     
-    // Temporarily change password type
+    // TECHNIQUE 5: Temporarily convert password to text (prevents detection)
     const originalType = passwordInput.type;
     passwordInput.type = 'text';
+    passwordInput.setAttribute('data-dsg-real-type', 'password');
+    
+    // TECHNIQUE 6: Readonly prevents browser from detecting credential entry
     usernameInput.setAttribute('readonly', 'readonly');
     passwordInput.setAttribute('readonly', 'readonly');
     
+    // TECHNIQUE 7: Remove focus to prevent autofill trigger
+    usernameInput.blur();
+    passwordInput.blur();
+    
+    // Restore after brief delay
     setTimeout(() => {
       usernameInput.removeAttribute('readonly');
       passwordInput.removeAttribute('readonly');
