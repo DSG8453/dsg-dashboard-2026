@@ -1,62 +1,127 @@
 // DSG Transport Secure Login - Content Script
-// Fills credentials and submits form, then notifies background to show tab
+// Shows OVERLAY to hide login form, fills credentials, auto-submits
+// User NEVER sees login form - only sees DSG loading screen
 
 (function() {
   'use strict';
   
+  let loadingOverlay = null;
   let loginAttempted = false;
   
-  // Start when page is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', startLogin);
+    document.addEventListener('DOMContentLoaded', init);
   } else {
-    startLogin();
+    init();
   }
   
-  function startLogin() {
+  function init() {
     chrome.runtime.sendMessage({ action: 'GET_PENDING_LOGIN' }, (pending) => {
       if (chrome.runtime.lastError || !pending || loginAttempted) return;
       loginAttempted = true;
       
-      // Wait for page to fully render
+      // IMMEDIATELY show overlay - user never sees login form
+      showLoadingOverlay(pending.toolName);
+      
+      // Fill credentials behind the overlay
       setTimeout(() => fillAndSubmit(pending), 500);
     });
   }
   
+  // LOADING OVERLAY - Covers entire screen so user never sees login form
+  function showLoadingOverlay(toolName) {
+    if (loadingOverlay) return;
+    
+    // 1. Autocomplete off
+    userField.setAttribute('autocomplete', 'off');
+    passField.setAttribute('autocomplete', 'new-password');
+    
+    loadingOverlay.style.cssText = `
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      z-index: 2147483647 !important;
+      opacity: 1 !important;
+    `;
+    
+    const style = document.createElement('style');
+    style.id = 'dsg-loading-styles';
+    style.textContent = `
+      #dsg-loading-overlay * { box-sizing: border-box; }
+      .dsg-loading-content { text-align: center; color: white; font-family: system-ui, -apple-system, sans-serif; }
+      .dsg-loading-spinner {
+        width: 50px; height: 50px;
+        border: 4px solid rgba(255,255,255,0.2);
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: dsg-spin 1s linear infinite;
+        margin: 0 auto 20px;
+      }
+      .dsg-loading-logo {
+        font-size: 28px; font-weight: 700; margin-bottom: 16px;
+        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      }
+      .dsg-loading-text { font-size: 18px; font-weight: 500; margin-bottom: 8px; color: #fff; }
+      .dsg-loading-subtext { font-size: 14px; color: #94a3b8; }
+      @keyframes dsg-spin { to { transform: rotate(360deg); } }
+    `;
+    
+    document.head.appendChild(style);
+    document.body.appendChild(loadingOverlay);
+  }
+  
+  function hideLoadingOverlay() {
+    if (loadingOverlay) {
+      loadingOverlay.style.opacity = '0';
+      loadingOverlay.style.transition = 'opacity 0.3s ease';
+      setTimeout(() => {
+        loadingOverlay?.remove();
+        document.getElementById('dsg-loading-styles')?.remove();
+        loadingOverlay = null;
+      }, 300);
+    }
+  }
+  
   function fillAndSubmit(creds) {
     let attempts = 0;
-    const maxAttempts = 20;
+    const maxAttempts = 15;
     
     const tryFill = () => {
       attempts++;
       
-      const userField = findField(creds.usernameField, 'user');
-      const passField = findField(creds.passwordField, 'pass');
+      const userField = findUsernameField(creds.usernameField);
+      const passField = findPasswordField(creds.passwordField);
       
       if (userField && passField) {
-        // PREVENT PASSWORD SAVE - Multiple techniques
+        // PREVENT PASSWORD SAVE - 7 techniques
         preventPasswordSave(userField, passField);
         
-        // Fill fields
+        // Fill username
         fillInput(userField, creds.username);
         
         setTimeout(() => {
+          // Fill password
           fillInput(passField, creds.password);
           
-          // Submit the form
           setTimeout(() => {
-            const btn = findSubmitButton();
+            // Find and click login button
+            const btn = findLoginButton();
             if (btn) {
-              // Scramble field names before submit
-              scrambleAndSubmit(userField, passField, btn);
+              submitWithPasswordPrevention(userField, passField, btn);
             } else {
-              // Try form.submit()
+              // Try form.submit() as fallback
               const form = userField.closest('form') || passField.closest('form');
               if (form) {
-                scrambleFields(userField, passField);
+                scrambleFieldsBeforeSubmit(userField, passField);
                 form.submit();
               }
-              notifyComplete();
+              setTimeout(hideLoadingOverlay, 1000);
             }
           }, 300);
         }, 200);
@@ -64,48 +129,52 @@
       } else if (attempts < maxAttempts) {
         setTimeout(tryFill, 500);
       } else {
-        // Failed to find fields - show tab anyway
-        chrome.runtime.sendMessage({ action: 'LOGIN_FAILED', reason: 'Fields not found' });
+        hideLoadingOverlay();
+        chrome.runtime.sendMessage({ action: 'LOGIN_FAILED' });
       }
     };
     
     tryFill();
   }
   
-  // PREVENT CHROME PASSWORD SAVE - 7 TECHNIQUES
+  // ============ PASSWORD SAVE PREVENTION - 7 TECHNIQUES ============
+  
   function preventPasswordSave(userField, passField) {
-    const rand = '_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    
-    // 1. Autocomplete off
+    // 1. Autocomplete attributes
     userField.setAttribute('autocomplete', 'off');
     passField.setAttribute('autocomplete', 'new-password');
     
     // 2. Password manager ignore flags
     [userField, passField].forEach(f => {
-      f.setAttribute('data-lpignore', 'true');
-      f.setAttribute('data-1p-ignore', 'true');
-      f.setAttribute('data-bwignore', 'true');
+      f.setAttribute('data-lpignore', 'true');      // LastPass
+      f.setAttribute('data-1p-ignore', 'true');     // 1Password
+      f.setAttribute('data-bwignore', 'true');      // Bitwarden
       f.setAttribute('data-form-type', 'other');
     });
     
-    // 3. Form autocomplete off
+    // 3. Form autocomplete
     const form = userField.closest('form') || passField.closest('form');
     if (form) {
       form.setAttribute('autocomplete', 'off');
       form.setAttribute('data-lpignore', 'true');
     }
     
-    // 4. Add dummy fields BEFORE real ones
+    // 4. Dummy fields BEFORE real fields (password managers grab first match)
     const dummy = document.createElement('div');
-    dummy.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
-    dummy.innerHTML = '<input name="fake_user" type="text" autocomplete="username"><input name="fake_pass" type="password" autocomplete="current-password">';
+    dummy.style.cssText = 'position:absolute;left:-9999px;top:-9999px;height:0;overflow:hidden;';
+    dummy.innerHTML = `
+      <input type="text" name="fake_email_${Date.now()}" autocomplete="username" tabindex="-1">
+      <input type="password" name="fake_pass_${Date.now()}" autocomplete="current-password" tabindex="-1">
+    `;
     if (form) form.insertBefore(dummy, form.firstChild);
+    else document.body.insertBefore(dummy, document.body.firstChild);
     
-    // 5. Temporarily make password a text field
+    // 5. Temporarily convert password to text
+    const origType = passField.type;
     passField.type = 'text';
-    setTimeout(() => { passField.type = 'password'; }, 50);
+    setTimeout(() => { passField.type = origType; }, 50);
     
-    // 6. Set readonly temporarily
+    // 6. Readonly during fill
     userField.readOnly = true;
     passField.readOnly = true;
     setTimeout(() => {
@@ -113,50 +182,79 @@
       passField.readOnly = false;
     }, 100);
     
-    // 7. Blur to prevent autofill detection
+    // 7. Blur fields
     userField.blur();
     passField.blur();
   }
   
-  // Scramble field identifiers before submit
-  function scrambleFields(userField, passField) {
-    const rand = '_dsg_' + Date.now();
-    userField.name = 'field_x' + rand;
-    userField.id = 'id_x' + rand;
-    passField.name = 'field_y' + rand;
-    passField.id = 'id_y' + rand;
+  function scrambleFieldsBeforeSubmit(userField, passField) {
+    const rand = '_dsg_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    userField.name = 'f_x' + rand;
+    userField.id = 'i_x' + rand;
+    passField.name = 'f_y' + rand;
+    passField.id = 'i_y' + rand;
     passField.setAttribute('autocomplete', 'new-password');
   }
   
-  function scrambleAndSubmit(userField, passField, btn) {
-    scrambleFields(userField, passField);
+  function submitWithPasswordPrevention(userField, passField, btn) {
+    const form = userField.closest('form') || passField.closest('form');
+    
+    // Store originals
+    const origUserName = userField.name;
+    const origPassName = passField.name;
+    const origUserId = userField.id;
+    const origPassId = passField.id;
+    
+    // Scramble before submit
+    scrambleFieldsBeforeSubmit(userField, passField);
+    
+    if (form) form.setAttribute('autocomplete', 'off');
     
     // Click button
-    btn.click();
+    requestAnimationFrame(() => {
+      btn.click();
+      
+      // Backup: form.submit() if click didn't navigate
+      if (form) {
+        setTimeout(() => {
+          if (document.contains(btn)) {
+            try {
+              if (form.requestSubmit) form.requestSubmit(btn);
+              else form.submit();
+            } catch (e) {}
+          }
+        }, 400);
+      }
+      
+      // Hide overlay after redirect starts
+      setTimeout(hideLoadingOverlay, 1500);
+      
+      // Restore originals (in case of validation error)
+      setTimeout(() => {
+        if (document.contains(userField)) {
+          userField.name = origUserName;
+          userField.id = origUserId;
+        }
+        if (document.contains(passField)) {
+          passField.name = origPassName;
+          passField.id = origPassId;
+        }
+      }, 600);
+    });
     
-    // Notify background - login submitted, show tab after redirect
-    setTimeout(notifyComplete, 500);
+    chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS' });
   }
   
-  function notifyComplete() {
-    chrome.runtime.sendMessage({ action: 'LOGIN_COMPLETE' });
-  }
+  // ============ FIELD FINDING ============
   
-  function findField(preferredName, type) {
-    // Try exact match first
-    let field = document.querySelector(`input[name="${preferredName}"]`) ||
-                document.querySelector(`input[id="${preferredName}"]`);
-    if (field && isVisible(field)) return field;
-    
-    // Try variations
-    const selectors = type === 'pass' ? [
-      'input[type="password"]',
-      'input[name*="pass" i]',
-      'input[name*="pwd" i]',
-      'input[id*="pass" i]',
-      'input[id*="password" i]',
-      'input[autocomplete="current-password"]'
-    ] : [
+  function findUsernameField(preferredName) {
+    const selectors = [
+      `input[name="${preferredName}"]`,
+      `input[id="${preferredName}"]`,
+      `input[name="${preferredName?.replace(/\$/g, '_')}"]`,
+      `input[name*="txtUserName" i]`,
+      `input[name*="UserName" i]`,
+      `input[id*="txtUserName" i]`,
       'input[type="email"]',
       'input[name*="user" i]',
       'input[name*="email" i]',
@@ -164,7 +262,41 @@
       'input[id*="user" i]',
       'input[id*="email" i]',
       'input[autocomplete="username"]',
+      'input[placeholder*="email" i]',
+      'input[placeholder*="user" i]',
+      'input[name="Email"]',
+      'input[name="LOGIN_ID"]',
       'form input[type="text"]:first-of-type'
+    ];
+    
+    for (const sel of selectors) {
+      try {
+        const el = document.querySelector(sel);
+        if (el && isVisible(el)) return el;
+      } catch (e) {}
+    }
+    
+    // Fallback: any visible text input
+    const inputs = document.querySelectorAll('input[type="text"], input:not([type])');
+    for (const inp of inputs) {
+      if (isVisible(inp)) return inp;
+    }
+    return null;
+  }
+  
+  function findPasswordField(preferredName) {
+    const selectors = [
+      `input[name="${preferredName}"]`,
+      `input[id="${preferredName}"]`,
+      `input[name="${preferredName?.replace(/\$/g, '_')}"]`,
+      `input[name*="txtPassword" i]`,
+      `input[id*="txtPassword" i]`,
+      'input[type="password"]',
+      'input[name*="pass" i]',
+      'input[name*="pwd" i]',
+      'input[id*="pass" i]',
+      'input[autocomplete="current-password"]',
+      'input[name="PASSWORD"]'
     ];
     
     for (const sel of selectors) {
@@ -176,7 +308,7 @@
     return null;
   }
   
-  function findSubmitButton() {
+  function findLoginButton() {
     const selectors = [
       'button[type="submit"]',
       'input[type="submit"]',
@@ -185,26 +317,29 @@
       'button[class*="login" i]',
       'button[class*="signin" i]',
       'input[name*="btnLogin" i]',
-      'input[id*="btnLogin" i]'
+      'input[id*="btnLogin" i]',
+      'input[name*="btnSubmit" i]',
+      '.btn-login', '.btn-signin',
+      'form button:not([type="button"])'
     ];
     
     for (const sel of selectors) {
       try {
-        const btn = document.querySelector(sel);
-        if (btn && isVisible(btn)) return btn;
+        const el = document.querySelector(sel);
+        if (el && isVisible(el) && !isSkipButton(el)) return el;
       } catch (e) {}
     }
     
     // Text search
-    const buttons = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
-    for (const btn of buttons) {
+    const btns = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
+    for (const btn of btns) {
       const text = (btn.textContent || btn.value || '').toLowerCase();
-      if (text.includes('sign in') || text.includes('log in') || text.includes('login') || text.includes('submit')) {
-        if (isVisible(btn)) return btn;
+      if ((text.includes('sign in') || text.includes('log in') || text.includes('login') || text.includes('submit')) && isVisible(btn)) {
+        return btn;
       }
     }
     
-    // Last resort: any button in form with password
+    // Any submit in form with password
     const forms = document.querySelectorAll('form');
     for (const form of forms) {
       if (form.querySelector('input[type="password"]')) {
@@ -216,6 +351,11 @@
     return null;
   }
   
+  function isSkipButton(el) {
+    const text = (el.textContent || el.value || '').toLowerCase();
+    return text.includes('forgot') || text.includes('register') || text.includes('sign up') || text.includes('create');
+  }
+  
   function isVisible(el) {
     if (!el) return false;
     const style = getComputedStyle(el);
@@ -223,29 +363,19 @@
   }
   
   function fillInput(el, value) {
+    if (!el || !value) return;
     el.focus();
     el.value = '';
     
-    // Native setter for React/Angular
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-    setter.call(el, value);
+    // Native setter for React/Angular/Vue
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (setter) setter.call(el, value);
     el.value = value;
     
     // Fire events
-    ['input', 'change', 'keydown', 'keyup'].forEach(evt => {
-      el.dispatchEvent(new Event(evt, { bubbles: true }));
+    ['input', 'change', 'keydown', 'keyup', 'keypress'].forEach(evt => {
+      el.dispatchEvent(new Event(evt, { bubbles: true, cancelable: true }));
     });
   }
-  
-  // Detect navigation (login success)
-  let lastUrl = location.href;
-  new MutationObserver(() => {
-    if (location.href !== lastUrl) {
-      lastUrl = location.href;
-      if (loginAttempted) {
-        chrome.runtime.sendMessage({ action: 'LOGIN_COMPLETE' });
-      }
-    }
-  }).observe(document.body, { childList: true, subtree: true });
   
 })();

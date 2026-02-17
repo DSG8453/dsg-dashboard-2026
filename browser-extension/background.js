@@ -1,23 +1,18 @@
 // DSG Transport Secure Login - Background Service Worker
-// HIDDEN TAB LOGIN: Opens tab in background, fills credentials, shows only after login complete
-// User NEVER sees login page - only the logged-in dashboard
-
-let hiddenTabs = {}; // Track tabs waiting for login completion
+// Opens tab VISIBLE with overlay covering login form
+// User sees loading screen, never the login form
 
 // Listen for messages from DSG Transport dashboard
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-  // Capture backend URL
-  if (sender.origin) {
-    setBackendUrl(sender.origin);
-  }
+  if (sender.origin) setBackendUrl(sender.origin);
   
   if (request.action === 'DSG_SECURE_LOGIN') {
-    handleHiddenLogin(request, sendResponse);
+    handleSecureLogin(request, sendResponse);
     return true;
   }
   
   if (request.action === 'DSG_AUTO_LOGIN') {
-    handleHiddenLogin(request, sendResponse);
+    handleSecureLogin(request, sendResponse);
     return true;
   }
   
@@ -26,8 +21,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
       installed: true, 
       version: chrome.runtime.getManifest().version,
       ready: true,
-      secure: true,
-      hiddenLogin: true
+      secure: true
     });
     return true;
   }
@@ -37,8 +31,6 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
 
 // Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  const tabId = sender.tab?.id;
-  
   if (request.action === 'GET_PENDING_LOGIN') {
     chrome.storage.local.get('pendingLogin', (data) => {
       const pending = data.pendingLogin;
@@ -58,23 +50,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   
-  // LOGIN COMPLETE - NOW show the hidden tab!
-  if (request.action === 'LOGIN_COMPLETE') {
-    if (tabId && hiddenTabs[tabId]) {
-      // Show the tab now
-      chrome.tabs.update(tabId, { active: true });
-      delete hiddenTabs[tabId];
-    }
-    sendResponse({ acknowledged: true });
-    return true;
-  }
-  
-  // LOGIN FAILED - still show tab so user can try manually
-  if (request.action === 'LOGIN_FAILED') {
-    if (tabId && hiddenTabs[tabId]) {
-      chrome.tabs.update(tabId, { active: true });
-      delete hiddenTabs[tabId];
-    }
+  if (request.action === 'LOGIN_SUCCESS' || request.action === 'LOGIN_FAILED') {
     sendResponse({ acknowledged: true });
     return true;
   }
@@ -82,12 +58,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return false;
 });
 
-// Handle login with HIDDEN TAB
-async function handleHiddenLogin(request, sendResponse) {
+// Handle secure login - Opens tab VISIBLE (overlay will cover it)
+async function handleSecureLogin(request, sendResponse) {
   try {
     let username, password, usernameField, passwordField;
     
-    // Decrypt credentials if encrypted
     if (request.encryptedPayload) {
       const backendUrl = getDynamicBackendUrl();
       const decryptResponse = await fetch(backendUrl + '/api/secure-access/decrypt-payload', {
@@ -96,9 +71,7 @@ async function handleHiddenLogin(request, sendResponse) {
         body: JSON.stringify({ encrypted: request.encryptedPayload })
       });
       
-      if (!decryptResponse.ok) {
-        throw new Error('Decrypt failed');
-      }
+      if (!decryptResponse.ok) throw new Error('Decrypt failed');
       
       const decrypted = await decryptResponse.json();
       if (!decrypted.success || !decrypted.u || !decrypted.p) {
@@ -116,11 +89,8 @@ async function handleHiddenLogin(request, sendResponse) {
       passwordField = request.passwordField || 'password';
     }
     
-    if (!username || !password) {
-      throw new Error('Missing credentials');
-    }
+    if (!username || !password) throw new Error('Missing credentials');
     
-    // Store pending login
     const loginData = {
       url: request.loginUrl,
       username: username,
@@ -133,36 +103,17 @@ async function handleHiddenLogin(request, sendResponse) {
     
     await chrome.storage.local.set({ pendingLogin: loginData });
     
-    // *** KEY: Open tab as HIDDEN (active: false) ***
+    // Open tab VISIBLE - overlay will cover login form immediately
     const tab = await chrome.tabs.create({ 
       url: request.loginUrl,
-      active: false  // TAB IS HIDDEN - user doesn't see it
+      active: true  // VISIBLE - but overlay covers everything
     });
-    
-    // Track this hidden tab
-    hiddenTabs[tab.id] = {
-      loginUrl: request.loginUrl,
-      toolName: request.toolName,
-      createdAt: Date.now()
-    };
-    
-    // Safety timeout: Show tab after 20 seconds if login hasn't completed
-    setTimeout(() => {
-      if (hiddenTabs[tab.id]) {
-        chrome.tabs.get(tab.id, (t) => {
-          if (!chrome.runtime.lastError && t) {
-            chrome.tabs.update(tab.id, { active: true });
-          }
-        });
-        delete hiddenTabs[tab.id];
-      }
-    }, 20000);
     
     // Clear credentials from memory
     setTimeout(() => {
       loginData.username = null;
       loginData.password = null;
-    }, 10000);
+    }, 15000);
     
     sendResponse({ 
       success: true, 
@@ -176,27 +127,6 @@ async function handleHiddenLogin(request, sendResponse) {
   }
 }
 
-// Detect when tab navigates (login succeeded)
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && hiddenTabs[tabId]) {
-    const tracked = hiddenTabs[tabId];
-    
-    // If URL changed from login page, login probably succeeded
-    if (tab.url && tracked.loginUrl) {
-      const isStillLoginPage = tab.url.toLowerCase().includes('login') || 
-                               tab.url.toLowerCase().includes('signin') ||
-                               tab.url === tracked.loginUrl;
-      
-      if (!isStillLoginPage) {
-        // URL changed - login succeeded! Show the tab
-        chrome.tabs.update(tabId, { active: true });
-        delete hiddenTabs[tabId];
-      }
-    }
-  }
-});
-
-// URL matching
 function isUrlMatch(pendingUrl, currentUrl) {
   if (!pendingUrl || !currentUrl) return false;
   try {
@@ -211,7 +141,6 @@ function isUrlMatch(pendingUrl, currentUrl) {
   }
 }
 
-// Backend URL management
 let dynamicBackendUrl = null;
 function setBackendUrl(url) {
   if (url && url.includes('dsgtransport')) {
@@ -229,11 +158,4 @@ setInterval(() => {
       chrome.storage.local.remove('pendingLogin');
     }
   });
-  // Cleanup old hidden tabs
-  const now = Date.now();
-  for (const tabId in hiddenTabs) {
-    if (now - hiddenTabs[tabId].createdAt > 60000) {
-      delete hiddenTabs[tabId];
-    }
-  }
 }, 30000);
