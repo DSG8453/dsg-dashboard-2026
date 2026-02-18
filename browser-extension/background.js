@@ -34,9 +34,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'GET_PENDING_LOGIN') {
     chrome.storage.local.get('pendingLogin', (data) => {
       const pending = data.pendingLogin;
-      if (pending && isUrlMatch(pending.url, sender.tab?.url)) {
+      const senderTabId = sender?.tab?.id;
+      const senderUrl = sender?.tab?.url;
+      if (
+        pending &&
+        isUrlMatch(pending.url, senderUrl) &&
+        (!pending.tabId || (senderTabId && pending.tabId === senderTabId))
+      ) {
+        // Do NOT remove here. Login pages are often inside iframes; the "wrong"
+        // frame may request first. We clear on LOGIN_SUCCESS/CLEAR_PENDING_LOGIN
+        // or via expiry cleanup.
         sendResponse(pending);
-        chrome.storage.local.remove('pendingLogin');
       } else {
         sendResponse(null);
       }
@@ -45,12 +53,43 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.action === 'CLEAR_PENDING_LOGIN') {
-    chrome.storage.local.remove('pendingLogin');
-    sendResponse({ success: true });
+    chrome.storage.local.get('pendingLogin', (data) => {
+      const pending = data.pendingLogin;
+      const senderTabId = sender?.tab?.id;
+      const senderUrl = sender?.tab?.url;
+      if (
+        pending &&
+        isUrlMatch(pending.url, senderUrl) &&
+        (!pending.tabId || (senderTabId && pending.tabId === senderTabId))
+      ) {
+        chrome.storage.local.remove('pendingLogin', () => sendResponse({ success: true }));
+      } else {
+        sendResponse({ success: false });
+      }
+    });
     return true;
   }
   
-  if (request.action === 'LOGIN_SUCCESS' || request.action === 'LOGIN_FAILED') {
+  if (request.action === 'LOGIN_SUCCESS') {
+    chrome.storage.local.get('pendingLogin', (data) => {
+      const pending = data.pendingLogin;
+      const senderTabId = sender?.tab?.id;
+      const senderUrl = sender?.tab?.url;
+      if (
+        pending &&
+        isUrlMatch(pending.url, senderUrl) &&
+        (!pending.tabId || (senderTabId && pending.tabId === senderTabId))
+      ) {
+        chrome.storage.local.remove('pendingLogin', () => sendResponse({ acknowledged: true, cleared: true }));
+      } else {
+        sendResponse({ acknowledged: true, cleared: false });
+      }
+    });
+    return true;
+  }
+
+  if (request.action === 'LOGIN_FAILED') {
+    // Don't clear pendingLogin on failure; another frame may still be able to fill.
     sendResponse({ acknowledged: true });
     return true;
   }
@@ -108,6 +147,13 @@ async function handleSecureLogin(request, sendResponse) {
       url: request.loginUrl,
       active: true  // VISIBLE - but overlay covers everything
     });
+
+    // Associate pending login with the created tab id
+    try {
+      await chrome.storage.local.set({ pendingLogin: { ...loginData, tabId: tab.id } });
+    } catch (e) {
+      // ignore
+    }
     
     // Clear credentials from memory
     setTimeout(() => {

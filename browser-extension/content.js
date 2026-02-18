@@ -7,6 +7,7 @@
   
   let loadingOverlay = null;
   let loginAttempted = false;
+  let overlayShown = false;
   
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
@@ -20,7 +21,7 @@
       loginAttempted = true;
       
       // IMMEDIATELY show overlay - user never sees login form
-      showLoadingOverlay(pending.toolName);
+      if (window.top === window) showLoadingOverlay(pending.toolName);
       
       // Fill credentials behind the overlay
       setTimeout(() => fillAndSubmit(pending), 500);
@@ -29,11 +30,19 @@
   
   // LOADING OVERLAY - Covers entire screen so user never sees login form
   function showLoadingOverlay(toolName) {
-    if (loadingOverlay) return;
+    if (loadingOverlay || overlayShown) return;
+    overlayShown = true;
     
-    // 1. Autocomplete off
-    userField.setAttribute('autocomplete', 'off');
-    passField.setAttribute('autocomplete', 'new-password');
+    loadingOverlay = document.createElement('div');
+    loadingOverlay.id = 'dsg-loading-overlay';
+    loadingOverlay.innerHTML = `
+      <div class="dsg-loading-content" role="status" aria-live="polite">
+        <div class="dsg-loading-spinner" aria-hidden="true"></div>
+        <div class="dsg-loading-logo">DSG Transport</div>
+        <div class="dsg-loading-text">Signing in…</div>
+        <div class="dsg-loading-subtext">${escapeHtml(toolName || 'Secure Login')}</div>
+      </div>
+    `;
     
     loadingOverlay.style.cssText = `
       position: fixed !important;
@@ -72,8 +81,13 @@
       @keyframes dsg-spin { to { transform: rotate(360deg); } }
     `;
     
-    document.head.appendChild(style);
-    document.body.appendChild(loadingOverlay);
+    (document.head || document.documentElement).appendChild(style);
+    const attach = () => {
+      if (!loadingOverlay || document.getElementById('dsg-loading-overlay')) return;
+      (document.body || document.documentElement).appendChild(loadingOverlay);
+    };
+    if (document.body) attach();
+    else document.addEventListener('DOMContentLoaded', attach, { once: true });
   }
   
   function hideLoadingOverlay() {
@@ -90,7 +104,7 @@
   
   function fillAndSubmit(creds) {
     let attempts = 0;
-    const maxAttempts = 15;
+    const maxAttempts = 40;
     
     const tryFill = () => {
       attempts++;
@@ -129,8 +143,8 @@
       } else if (attempts < maxAttempts) {
         setTimeout(tryFill, 500);
       } else {
+        // Don't clear pending creds on a single-frame miss; many logins are inside iframes.
         hideLoadingOverlay();
-        chrome.runtime.sendMessage({ action: 'LOGIN_FAILED' });
       }
     };
     
@@ -359,7 +373,10 @@
   function isVisible(el) {
     if (!el) return false;
     const style = getComputedStyle(el);
-    return style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null;
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+    const rect = el.getBoundingClientRect?.();
+    if (!rect) return true;
+    return rect.width > 0 && rect.height > 0;
   }
   
   function fillInput(el, value) {
@@ -375,6 +392,19 @@
     // Fire events
     ['input', 'change', 'keydown', 'keyup', 'keypress'].forEach(evt => {
       el.dispatchEvent(new Event(evt, { bubbles: true, cancelable: true }));
+    });
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => {
+      switch (c) {
+        case '&': return '&amp;';
+        case '<': return '&lt;';
+        case '>': return '&gt;';
+        case '"': return '&quot;';
+        case "'": return '&#39;';
+        default: return c;
+      }
     });
   }
   
