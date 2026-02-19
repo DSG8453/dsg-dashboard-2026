@@ -369,96 +369,42 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
     }
   };
   
-  // Fallback access using request-access endpoint (opens in new tab with auto-submit form)
+  // Strict backend mode: only open authenticated gateway session.
   const handleFallbackAccess = async () => {
     try {
       const response = await toolsAPI.startGatewaySession(tool.id);
       
       if (response.access_url || response.gateway_url) {
-        // Open the secure access URL (handles auto-login via form submission)
-        // Use relative path - Vercel proxies /api/* to the backend
         const gatewayPath = response.gateway_url || response.access_url;
         window.open(gatewayPath, "_blank", "noopener,noreferrer");
         
         toast.success(`Opening ${tool.name}`, {
-          description: response.has_auto_login 
-            ? "Auto-login in progress..." 
-            : "Please login manually",
+          description: "Secure backend login in progress...",
           icon: <Shield className="h-4 w-4" />,
         });
-      } else if (response.login_url) {
-        window.open(response.login_url, "_blank", "noopener,noreferrer");
-        toast.info(`${tool.name} opened`, {
-          description: "Please login manually",
-        });
+      } else {
+        throw new Error("Secure gateway URL not returned");
       }
     } catch (error) {
       console.error("Fallback access failed:", error);
       toast.error("Failed to access tool", {
-        description: error.message || "Please contact Super Admin",
+        description: error.message || "Strict backend login failed. Please contact Super Admin.",
       });
     } finally {
       setIsAccessingTool(false);
     }
   };
 
-  // Main access handler - Direct login (Bitwarden-style)
+  // Main access handler - strict backend login only
   const handleToolAccess = async () => {
     setIsAccessingTool(true);
     
-    try {
-      // Try direct login first
-      toast.info(`Opening ${tool.name}...`, {
-        description: "Preparing secure access",
-        icon: <Shield className="h-4 w-4" />,
-      });
-      
-      const response = await toolsAPI.directLogin(tool.id);
-      
-      if (response.success) {
-        // Check if user has extension installed
-        const extensionId = localStorage.getItem('dsg_extension_id');
-        
-        if (extensionId && typeof chrome !== 'undefined' && chrome.runtime) {
-          // Use extension for auto-fill
-          await handleExtensionAccess();
-        } else {
-          // No extension - open tool directly (user will login manually)
-          const toolUrl = response.direct_url || tool.url;
-          window.open(toolUrl, '_blank', 'noopener');
-          
-          if (response.has_credentials) {
-            toast.success(`${tool.name} opened!`, {
-              description: "Install browser extension from Profile for auto-login",
-              icon: <Shield className="h-4 w-4" />,
-            });
-          } else {
-            toast.info(`${tool.name} opened`, {
-              description: "Please login manually",
-            });
-          }
-        }
-      } else {
-        throw new Error(response.error || "Failed to access tool");
-      }
-    } catch (error) {
-      console.error("Direct login failed:", error);
-      
-      // Fallback - just open the tool URL directly
-      const toolUrl = tool.credentials?.login_url || tool.url;
-      if (toolUrl) {
-        window.open(toolUrl, '_blank', 'noopener');
-        toast.info(`${tool.name} opened`, {
-          description: "Please login manually",
-        });
-      } else {
-        toast.error("Failed to open tool", {
-          description: error.message || "Please contact Super Admin",
-        });
-      }
-    } finally {
-      setIsAccessingTool(false);
-    }
+    toast.info(`Opening ${tool.name}...`, {
+      description: "Creating secure backend session",
+      icon: <Shield className="h-4 w-4" />,
+    });
+    
+    await handleFallbackAccess();
   };
 
   // Save extension ID

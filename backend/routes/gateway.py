@@ -1,595 +1,404 @@
 """
-Tool Gateway - Access tools ONLY through the dashboard
-Users cannot access tools outside the dashboard
-Credentials are never visible
+Tool Gateway - strict backend login mode.
+Credentials and login page are never exposed in the user browser.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from services.secret_manager_service import secret_manager
-from utils.tool_mapping import normalize_tool_name
-from fastapi.responses import HTMLResponse, StreamingResponse
+from datetime import datetime, timedelta, timezone
+import hashlib
+import re
+import secrets
+from urllib.parse import urljoin, urlparse
+
+import aiohttp
+from bson import ObjectId
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import HTMLResponse, RedirectResponse
+
 from database import get_db
 from routes.auth import get_current_user
-from bson import ObjectId
-from datetime import datetime, timezone, timedelta
-import aiohttp
-import secrets
-import hashlib
-import json
-import base64
-import re
-from urllib.parse import urljoin, urlparse
+from services.secret_manager_service import secret_manager
+from services.tool_login_service import server_login_to_tool
+from utils.tool_mapping import normalize_tool_name
 
 router = APIRouter()
 
-# Store active gateway sessions
+# In-memory active gateway sessions.
 gateway_sessions = {}
-
-# Session timeout (30 minutes)
 SESSION_TIMEOUT = timedelta(minutes=30)
 
 
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _build_base_url(raw_url: str) -> str:
+    parsed = urlparse(raw_url)
+    if not parsed.scheme or not parsed.netloc:
+        raise HTTPException(status_code=400, detail="Tool URL must include scheme and host")
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _is_expired(session: dict) -> bool:
+    return datetime.now(timezone.utc) > session["expires_at"]
+
+
+def _touch_session(session: dict):
+    session["last_access"] = datetime.now(timezone.utc)
+
+
+def _append_query(url: str, query_string: str) -> str:
+    if not query_string:
+        return url
+    joiner = "&" if "?" in url else "?"
+    return f"{url}{joiner}{query_string}"
+
+
+def _is_login_page_url(url: str, login_url: str) -> bool:
+    """Heuristic to detect if a response appears to be a login page again."""
+    try:
+        current = urlparse(url)
+        initial = urlparse(login_url)
+        if current.netloc != initial.netloc:
+            return False
+        path = (current.path or "").lower()
+        return any(keyword in path for keyword in ("login", "signin", "auth"))
+    except Exception:
+        return False
+
+
+def _resolve_credentials(tool: dict) -> dict:
+    """
+    Resolve backend login credentials.
+    Priority:
+      1) tool.credentials from database
+      2) Google Secret Manager fallback
+    """
+    db_creds = tool.get("credentials") or {}
+    login_url = db_creds.get("login_url") or tool.get("url")
+    username = db_creds.get("username")
+    password = db_creds.get("password")
+    username_field = db_creds.get("username_field") or "username"
+    password_field = db_creds.get("password_field") or "password"
+
+    if username and password and login_url:
+        return {
+            "login_url": login_url,
+            "username": username,
+            "password": password,
+            "username_field": username_field,
+            "password_field": password_field,
+        }
+
+    # Fallback to Secret Manager to support legacy credential storage.
+    normalized_name = normalize_tool_name(tool.get("name", ""))
+    try:
+        secret_creds = secret_manager.get_tool_credentials(normalized_name)
+        secret_user = secret_creds.get("username")
+        secret_pass = secret_creds.get("password")
+        if secret_user and secret_pass and login_url:
+            return {
+                "login_url": login_url,
+                "username": secret_user,
+                "password": secret_pass,
+                "username_field": username_field,
+                "password_field": password_field,
+            }
+    except Exception:
+        pass
+
+    raise HTTPException(
+        status_code=400,
+        detail="Tool credentials are not configured for strict backend login"
+    )
+
+
+def _get_session_or_raise(session_token: str) -> dict:
+    session_hash = _hash_token(session_token)
+    session = gateway_sessions.get(session_hash)
+    if not session:
+        raise HTTPException(status_code=403, detail="Gateway session is invalid or expired")
+    if _is_expired(session):
+        del gateway_sessions[session_hash]
+        raise HTTPException(status_code=403, detail="Gateway session has expired")
+    return session
+
+
 @router.post("/start/{tool_id}")
-async def start_gateway_session(
-    tool_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """Start a gateway session to access a tool through the dashboard"""
+async def start_gateway_session(tool_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Strict backend mode:
+    1) Backend logs in to tool using stored credentials (Playwright)
+    2) Backend stores authenticated cookies in gateway session
+    3) Browser only opens proxied authenticated session URL
+    """
     db = await get_db()
-    
+
     try:
         obj_id = ObjectId(tool_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid tool ID")
-    
+
     tool = await db.tools.find_one({"_id": obj_id})
     if not tool:
         raise HTTPException(status_code=404, detail="Tool not found")
-    
-    # Check access
+
     if current_user.get("role") != "Super Administrator":
         user_data = await db.users.find_one({"_id": ObjectId(current_user["id"])})
         allowed_tools = user_data.get("allowed_tools", []) if user_data else []
         if tool_id not in allowed_tools:
             raise HTTPException(status_code=403, detail="Access denied")
-    
-# Get credentials from Secret Manager
-    tool_name_normalized = normalize_tool_name(tool.get("name", ""))
-    
-    try:
-        credentials = secret_manager.get_tool_credentials(tool_name_normalized)
-        base_url = tool.get("url", "") or tool.get("login_url", "")
-        
-        if not base_url:
-            raise HTTPException(status_code=400, detail="Tool URL not configured")
-        
-        credentials["login_url"] = base_url
-        
-    except Exception as e:
+
+    creds = _resolve_credentials(tool)
+    login_url = creds["login_url"]
+
+    # Backend performs login; user never sees this process.
+    login_result = await server_login_to_tool(
+        login_url=login_url,
+        username=creds["username"],
+        password=creds["password"],
+        username_field=creds["username_field"],
+        password_field=creds["password_field"],
+        tool_name=tool.get("name", "Tool"),
+        timeout=45000,
+    )
+
+    if not login_result.get("success"):
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to retrieve credentials: {str(e)}"
+            status_code=502,
+            detail=f"Backend login failed: {login_result.get('error', 'Unknown error')}"
         )
-    
-    # Create gateway session
+
+    final_url = login_result.get("final_url") or login_url
+    if _is_login_page_url(final_url, login_url):
+        raise HTTPException(
+            status_code=502,
+            detail="Backend login did not complete successfully (still on login page)"
+        )
+
+    cookie_store = {}
+    for cookie in login_result.get("cookies", []):
+        name = cookie.get("name")
+        if name:
+            cookie_store[name] = cookie.get("value", "")
+
     session_token = secrets.token_urlsafe(32)
-    session_hash = hashlib.sha256(session_token.encode()).hexdigest()
-    
+    session_hash = _hash_token(session_token)
+
     gateway_sessions[session_hash] = {
         "tool_id": tool_id,
         "tool_name": tool.get("name"),
-        "base_url": base_url,
-        "credentials": credentials,
+        "base_url": _build_base_url(login_url),
+        "login_url": login_url,
+        "final_url": final_url,
         "user_id": current_user["id"],
         "user_email": current_user["email"],
-        "cookies": {},  # Will store tool's session cookies
-        "logged_in": False,
+        "cookies": cookie_store,
+        "logged_in": True,
         "created_at": datetime.now(timezone.utc),
         "expires_at": datetime.now(timezone.utc) + SESSION_TIMEOUT,
-        "last_access": datetime.now(timezone.utc)
+        "last_access": datetime.now(timezone.utc),
     }
-    
-    # Log activity
+
     await db.activity_logs.insert_one({
         "user_email": current_user["email"],
         "user_name": current_user.get("name", current_user["email"]),
-        "action": "Started Gateway Session",
+        "action": "Started Strict Backend Session",
         "target": tool.get("name"),
-        "details": f"Secure gateway access to {tool.get('name')}",
+        "details": f"Backend-authenticated gateway access to {tool.get('name')}",
         "activity_type": "access",
         "created_at": datetime.now(timezone.utc).isoformat()
     })
-    
+
     return {
+        "success": True,
         "session_token": session_token,
         "gateway_url": f"/api/gateway/view/{session_token}",
         "tool_name": tool.get("name"),
-        "expires_in": SESSION_TIMEOUT.seconds
+        "strict_backend_mode": True,
+        "expires_in": SESSION_TIMEOUT.seconds,
     }
 
 
 @router.get("/view/{session_token}")
 async def view_tool_gateway(session_token: str):
-    """View tool through the gateway - secure credential copy system"""
-    session_hash = hashlib.sha256(session_token.encode()).hexdigest()
-    session = gateway_sessions.get(session_hash)
-    
-    if not session:
-        return HTMLResponse(content=get_error_html("Session Not Found", 
-            "This gateway session has expired or is invalid."), status_code=403)
-    
-    if datetime.now(timezone.utc) > session["expires_at"]:
-        del gateway_sessions[session_hash]
-        return HTMLResponse(content=get_error_html("Session Expired", 
-            "Your gateway session has expired. Please start a new session."), status_code=403)
-    
-    # Update last access
-    gateway_sessions[session_hash]["last_access"] = datetime.now(timezone.utc)
-    
-    tool_name = session["tool_name"]
-    base_url = session["base_url"]
-    
-    # Get fresh credentials from Secret Manager
-    tool_name_normalized = normalize_tool_name(tool_name)
+    """
+    Entry endpoint for authenticated gateway sessions.
+    Redirects directly to proxy with backend-authenticated cookies.
+    """
     try:
-        credentials = secret_manager.get_tool_credentials(tool_name_normalized)
-        username = credentials.get("username", "")
-        password = credentials.get("password", "")
-    except Exception as e:
-        return HTMLResponse(
-            content=get_error_html("Credentials Error", 
-                "Failed to retrieve credentials. Contact your administrator."),
-            status_code=500
-        )
-    
-    # Encode credentials for secure copy (not visible to user)
-    encoded_user = base64.b64encode(username.encode()).decode()
-    encoded_pass = base64.b64encode(password.encode()).decode()
-    
-    # Secure gateway page with copy-to-clipboard functionality
-    html = f'''<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>{tool_name} - DSG Secure Gateway</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ 
-            font-family: system-ui, -apple-system, sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            color: white;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }}
-        .header {{
-            background: rgba(0,0,0,0.3);
-            padding: 16px 24px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }}
-        .header-left {{
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }}
-        .logo {{
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-weight: 600;
-            font-size: 18px;
-        }}
-        .logo svg {{ color: #3b82f6; }}
-        .tool-badge {{
-            background: #3b82f6;
-            padding: 6px 14px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 500;
-        }}
-        .secure-badge {{
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: rgba(34, 197, 94, 0.15);
-            border: 1px solid rgba(34, 197, 94, 0.3);
-            padding: 6px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            color: #22c55e;
-        }}
-        .close-btn {{
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            color: #f87171;
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.2s;
-        }}
-        .close-btn:hover {{ background: #ef4444; color: white; }}
-        
-        .content {{
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 40px;
-        }}
-        .card {{
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 480px;
-            width: 100%;
-        }}
-        .card-header {{
-            text-align: center;
-            margin-bottom: 30px;
-        }}
-        .card-header h2 {{
-            font-size: 24px;
-            margin-bottom: 8px;
-        }}
-        .card-header p {{
-            opacity: 0.7;
-            font-size: 14px;
-        }}
-        
-        .credential-box {{
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
-        }}
-        .credential-label {{
-            font-size: 12px;
-            opacity: 0.6;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }}
-        .credential-row {{
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }}
-        .credential-value {{
-            flex: 1;
-            background: rgba(255,255,255,0.05);
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 16px;
-            letter-spacing: 2px;
-        }}
-        .copy-btn {{
-            background: #3b82f6;
-            border: none;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }}
-        .copy-btn:hover {{ background: #2563eb; transform: translateY(-1px); }}
-        .copy-btn.copied {{ background: #22c55e; }}
-        
-        .open-btn {{
-            width: 100%;
-            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-            border: none;
-            color: white;
-            padding: 16px;
-            border-radius: 12px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            margin-top: 24px;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }}
-        .open-btn:hover {{ transform: translateY(-2px); box-shadow: 0 10px 30px rgba(59,130,246,0.3); }}
-        
-        .info-box {{
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid rgba(59, 130, 246, 0.2);
-            border-radius: 12px;
-            padding: 16px;
-            margin-top: 24px;
-            font-size: 13px;
-            text-align: center;
-        }}
-        .info-box strong {{ color: #60a5fa; }}
-        
-        .steps {{
-            margin-top: 20px;
-            font-size: 13px;
-            opacity: 0.8;
-        }}
-        .steps ol {{
-            padding-left: 20px;
-        }}
-        .steps li {{
-            margin-bottom: 8px;
-        }}
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="header-left">
-            <div class="logo">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                </svg>
-                DSG Transport
-            </div>
-            <div class="tool-badge">{tool_name}</div>
-            <div class="secure-badge">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                    <path d="M7 11V7a5 5 0 0110 0v4"/>
-                </svg>
-                Credentials Protected
-            </div>
-        </div>
-        <button class="close-btn" onclick="window.close()">✕ Close</button>
-    </div>
-    
-    <div class="content">
-        <div class="card">
-            <div class="card-header">
-                <h2>🔐 Secure Login</h2>
-                <p>Copy credentials below and paste into {tool_name}</p>
-            </div>
-            
-            <div class="credential-box">
-                <div class="credential-label">Username</div>
-                <div class="credential-row">
-                    <div class="credential-value">••••••••••••</div>
-                    <button class="copy-btn" onclick="copyUsername(this)" id="copyUserBtn">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-                        </svg>
-                        Copy
-                    </button>
-                </div>
-            </div>
-            
-            <div class="credential-box">
-                <div class="credential-label">Password</div>
-                <div class="credential-row">
-                    <div class="credential-value">••••••••••••</div>
-                    <button class="copy-btn" onclick="copyPassword(this)" id="copyPassBtn">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-                        </svg>
-                        Copy
-                    </button>
-                </div>
-            </div>
-            
-            <button class="open-btn" onclick="openTool()">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
-                    <polyline points="15 3 21 3 21 9"/>
-                    <line x1="10" y1="14" x2="21" y2="3"/>
-                </svg>
-                Open {tool_name} Login Page
-            </button>
-            
-            <div class="info-box">
-                <strong>🛡️ Your credentials are secure</strong><br>
-                Passwords are hidden and managed by your administrator.<br>
-                You can copy but never see the actual values.
-            </div>
-            
-            <div class="steps">
-                <strong>Steps:</strong>
-                <ol>
-                    <li>Click "Copy" next to Username</li>
-                    <li>Open the login page and paste</li>
-                    <li>Click "Copy" next to Password</li>
-                    <li>Paste and login</li>
-                </ol>
-            </div>
-        </div>
-    </div>
-    
-    <script>
-        // Encoded credentials (hidden from user)
-        var _u = "{encoded_user}";
-        var _p = "{encoded_pass}";
-        
-        function copyUsername(btn) {{
-            var text = atob(_u);
-            navigator.clipboard.writeText(text).then(function() {{
-                btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
-                btn.classList.add('copied');
-                setTimeout(function() {{
-                    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy';
-                    btn.classList.remove('copied');
-                }}, 2000);
-            }});
-        }}
-        
-        function copyPassword(btn) {{
-            var text = atob(_p);
-            navigator.clipboard.writeText(text).then(function() {{
-                btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
-                btn.classList.add('copied');
-                setTimeout(function() {{
-                    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy';
-                    btn.classList.remove('copied');
-                }}, 2000);
-            }});
-        }}
-        
-        function openTool() {{
-            window.open("{base_url}", "_blank");
-        }}
-        
-        // Security: clear from memory after 5 minutes
-        setTimeout(function() {{
-            _u = '';
-            _p = '';
-        }}, 300000);
-        
-        // Prevent view source / inspect
-        document.addEventListener('contextmenu', function(e) {{ e.preventDefault(); }});
-    </script>
-</body>
-</html>'''
-    
-    return HTMLResponse(content=html)
+        session = _get_session_or_raise(session_token)
+    except HTTPException as exc:
+        return HTMLResponse(get_error_html("Session Error", exc.detail), status_code=exc.status_code)
+
+    _touch_session(session)
+    return RedirectResponse(url=f"/api/gateway/proxy/{session_token}/", status_code=status.HTTP_302_FOUND)
+
+
+def _rewrite_html_for_proxy(html: str, session_token: str, base_url: str) -> str:
+    """
+    Rewrite links/resources/forms so navigation stays inside our gateway proxy.
+    """
+    parsed = urlparse(base_url)
+    base_domain = f"{parsed.scheme}://{parsed.netloc}"
+    proxy_prefix = f"/api/gateway/proxy/{session_token}"
+
+    # Absolute links to tool domain.
+    html = html.replace(f'href="{base_domain}', f'href="{proxy_prefix}')
+    html = html.replace(f"href='{base_domain}", f"href='{proxy_prefix}")
+    html = html.replace(f'src="{base_domain}', f'src="{proxy_prefix}')
+    html = html.replace(f"src='{base_domain}", f"src='{proxy_prefix}")
+    html = html.replace(f'action="{base_domain}', f'action="{proxy_prefix}')
+    html = html.replace(f"action='{base_domain}", f"action='{proxy_prefix}")
+
+    # Root-relative links (e.g., href="/dashboard").
+    root_relative = re.compile(r"""(href|src|action)=(['"])/(?!api/gateway/proxy/)""", re.IGNORECASE)
+    return root_relative.sub(rf"\1=\2{proxy_prefix}/", html)
 
 
 @router.get("/proxy/{session_token}/{path:path}")
 @router.post("/proxy/{session_token}/{path:path}")
-async def proxy_tool_request(
-    session_token: str,
-    path: str = "",
-    request: Request = None
-):
-    """Proxy requests to the tool - maintains session"""
-    session_hash = hashlib.sha256(session_token.encode()).hexdigest()
-    session = gateway_sessions.get(session_hash)
-    
-    if not session:
-        return HTMLResponse(content="<h1>Session expired</h1>", status_code=403)
-    
-    if datetime.now(timezone.utc) > session["expires_at"]:
-        del gateway_sessions[session_hash]
-        return HTMLResponse(content="<h1>Session expired</h1>", status_code=403)
-    
-    # Update last access
-    gateway_sessions[session_hash]["last_access"] = datetime.now(timezone.utc)
-    
-    base_url = session["base_url"]
-    credentials = session.get("credentials", {})
-    
-    # Build target URL
-    target_url = urljoin(base_url, path)
-    if request.query_params:
-        target_url += "?" + str(request.query_params)
-    
+async def proxy_tool_request(session_token: str, path: str = "", request: Request = None):
+    """Proxy authenticated requests to tool using backend-managed cookies."""
     try:
-        async with aiohttp.ClientSession() as http_session:
-            # Get cookies from session
-            cookies = session.get("cookies", {})
-            
-            # Prepare headers
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.5",
-            }
-            
-            # Make request
-            method = request.method
+        session = _get_session_or_raise(session_token)
+    except HTTPException as exc:
+        return HTMLResponse(get_error_html("Session Error", exc.detail), status_code=exc.status_code)
+
+    _touch_session(session)
+
+    if path:
+        target_url = urljoin(session["base_url"].rstrip("/") + "/", path)
+    else:
+        target_url = session.get("final_url") or session["base_url"]
+
+    query_string = str(request.query_params) if request and request.query_params else ""
+    target_url = _append_query(target_url, query_string)
+
+    method = (request.method if request else "GET").upper()
+    request_headers = request.headers if request else {}
+    upstream_headers = {
+        "User-Agent": request_headers.get(
+            "user-agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        ),
+        "Accept": request_headers.get("accept", "*/*"),
+        "Accept-Language": request_headers.get("accept-language", "en-US,en;q=0.9"),
+    }
+    content_type = request_headers.get("content-type")
+    if content_type:
+        upstream_headers["Content-Type"] = content_type
+
+    timeout = aiohttp.ClientTimeout(total=45)
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as http_session:
             if method == "POST":
                 body = await request.body()
-                async with http_session.post(target_url, data=body, headers=headers, cookies=cookies, allow_redirects=True) as resp:
-                    content = await resp.read()
-                    # Store cookies
-                    for cookie in resp.cookies.values():
-                        gateway_sessions[session_hash]["cookies"][cookie.key] = cookie.value
+                async with http_session.post(
+                    target_url,
+                    data=body,
+                    headers=upstream_headers,
+                    cookies=session.get("cookies", {}),
+                    allow_redirects=True,
+                ) as upstream_resp:
+                    payload = await upstream_resp.read()
+                    final_url = str(upstream_resp.url)
+                    resp_content_type = upstream_resp.headers.get("Content-Type", "text/html")
+                    resp_status = upstream_resp.status
+                    for cookie in upstream_resp.cookies.values():
+                        session["cookies"][cookie.key] = cookie.value
             else:
-                async with http_session.get(target_url, headers=headers, cookies=cookies, allow_redirects=True) as resp:
-                    content = await resp.read()
-                    # Store cookies
-                    for cookie in resp.cookies.values():
-                        gateway_sessions[session_hash]["cookies"][cookie.key] = cookie.value
-            
-            content_type = resp.headers.get("Content-Type", "text/html")
-            
-            # Rewrite URLs in HTML content to go through proxy
-            if "text/html" in content_type:
-                try:
-                    html = content.decode("utf-8", errors="ignore")
-                    # Rewrite absolute URLs
-                    parsed = urlparse(base_url)
-                    base_domain = f"{parsed.scheme}://{parsed.netloc}"
-                    html = html.replace(f'href="{base_domain}', f'href="/api/gateway/proxy/{session_token}')
-                    html = html.replace(f"href='{base_domain}", f"href='/api/gateway/proxy/{session_token}")
-                    html = html.replace(f'src="{base_domain}', f'src="/api/gateway/proxy/{session_token}')
-                    html = html.replace(f"src='{base_domain}", f"src='/api/gateway/proxy/{session_token}")
-                    html = html.replace(f'action="{base_domain}', f'action="/api/gateway/proxy/{session_token}')
-                    html = html.replace(f"action='{base_domain}", f"action='/api/gateway/proxy/{session_token}")
-                    content = html.encode("utf-8")
-                except Exception:
-                    pass
-            
-            return Response(content=content, media_type=content_type)
-            
-    except Exception as e:
-        return HTMLResponse(content=f"<h1>Error loading tool</h1><p>{str(e)}</p>", status_code=500)
+                async with http_session.get(
+                    target_url,
+                    headers=upstream_headers,
+                    cookies=session.get("cookies", {}),
+                    allow_redirects=True,
+                ) as upstream_resp:
+                    payload = await upstream_resp.read()
+                    final_url = str(upstream_resp.url)
+                    resp_content_type = upstream_resp.headers.get("Content-Type", "text/html")
+                    resp_status = upstream_resp.status
+                    for cookie in upstream_resp.cookies.values():
+                        session["cookies"][cookie.key] = cookie.value
+
+        # If auth is lost, do not expose raw tool login page in browser.
+        if _is_login_page_url(final_url, session["login_url"]):
+            return HTMLResponse(
+                get_error_html(
+                    "Session Reauthentication Required",
+                    "Secure backend session ended. Please return to dashboard and open the tool again."
+                ),
+                status_code=440
+            )
+
+        session["final_url"] = final_url
+
+        if "text/html" in resp_content_type:
+            html = payload.decode("utf-8", errors="ignore")
+            html = _rewrite_html_for_proxy(html, session_token, session["base_url"])
+            return Response(content=html.encode("utf-8"), media_type="text/html", status_code=resp_status)
+
+        return Response(content=payload, media_type=resp_content_type, status_code=resp_status)
+    except Exception as exc:
+        return HTMLResponse(
+            get_error_html("Gateway Error", f"Failed to load tool through secure gateway: {str(exc)}"),
+            status_code=500
+        )
 
 
 @router.delete("/session/{session_token}")
 async def end_gateway_session(session_token: str, current_user: dict = Depends(get_current_user)):
-    """End a gateway session"""
-    session_hash = hashlib.sha256(session_token.encode()).hexdigest()
+    """Explicitly end a strict backend gateway session."""
+    session_hash = _hash_token(session_token)
     if session_hash in gateway_sessions:
         del gateway_sessions[session_hash]
     return {"message": "Session ended"}
 
 
 def get_error_html(title: str, message: str) -> str:
-    return f'''<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html>
-<head><title>{title}</title>
-<style>
-body {{
-    font-family: system-ui, sans-serif;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    background: #0f172a;
-    color: white;
-    text-align: center;
-    margin: 0;
-}}
-.box {{
-    background: rgba(255,255,255,0.1);
-    padding: 40px;
-    border-radius: 16px;
-    max-width: 400px;
-}}
-h1 {{ margin-bottom: 16px; }}
-a {{
-    display: inline-block;
-    margin-top: 20px;
-    background: #3b82f6;
-    color: white;
-    text-decoration: none;
-    padding: 10px 20px;
-    border-radius: 8px;
-}}
-a:hover {{ background: #2563eb; }}
-</style>
+<head>
+  <meta charset="UTF-8">
+  <title>{title}</title>
+  <style>
+    body {{
+      font-family: system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: #0f172a;
+      color: white;
+      margin: 0;
+      text-align: center;
+      padding: 24px;
+    }}
+    .box {{
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      max-width: 560px;
+      padding: 36px;
+    }}
+    h1 {{ margin: 0 0 12px 0; font-size: 24px; }}
+    p {{ margin: 0; color: #cbd5e1; line-height: 1.5; }}
+    a {{
+      margin-top: 20px;
+      display: inline-block;
+      background: #3b82f6;
+      color: white;
+      text-decoration: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+    }}
+    a:hover {{ background: #2563eb; }}
+  </style>
 </head>
 <body>
-<div class="box">
-    <h1>⚠️ {title}</h1>
+  <div class="box">
+    <h1>{title}</h1>
     <p>{message}</p>
     <a href="/">Return to Dashboard</a>
-</div>
+  </div>
 </body>
-</html>'''
+</html>"""
