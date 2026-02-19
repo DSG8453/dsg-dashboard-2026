@@ -1019,7 +1019,7 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
                   handleFallbackAccess();
                 }}
               >
-                Skip for now (manual login)
+                Use secure backend gateway
               </Button>
             </div>
           </div>
