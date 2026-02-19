@@ -241,6 +241,7 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
     if (!extensionId) {
       // Show extension installation dialog
       setExtensionDialogOpen(true);
+      setIsAccessingTool(false);
       return;
     }
     
@@ -253,6 +254,7 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
       toast.error("Secure Login Extension not detected", {
         description: "Please reconnect your extension and try again.",
       });
+      setIsAccessingTool(false);
       return;
     }
     
@@ -395,15 +397,25 @@ export const ToolCard = ({ tool, onDelete, onUpdate }) => {
     }
   };
 
-  // Main access handler - strict backend login only
+  // Main access handler - extension first, strict backend gateway fallback
   const handleToolAccess = async () => {
     setIsAccessingTool(true);
     
     toast.info(`Opening ${tool.name}...`, {
-      description: "Creating secure backend session",
+      description: "Preparing secure extension login",
       icon: <Shield className="h-4 w-4" />,
     });
     
+    // Use extension-based auto-fill as the primary path.
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      await handleExtensionAccess();
+      return;
+    }
+    
+    // Browser does not expose extension runtime API; fallback to backend gateway.
+    toast.warning("Extension runtime not available", {
+      description: "Using secure backend gateway instead.",
+    });
     await handleFallbackAccess();
   };
 
