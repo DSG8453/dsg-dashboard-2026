@@ -41,8 +41,8 @@
       <div class="dsg-loading-content" role="status" aria-live="polite">
         <div class="dsg-loading-spinner" aria-hidden="true"></div>
         <div class="dsg-loading-logo">DSG Transport</div>
-        <div class="dsg-loading-text">Signing in…</div>
-        <div class="dsg-loading-subtext">${escapeHtml(toolName || 'Secure Login')}</div>
+        <div class="dsg-loading-text" id="dsg-loading-text">Signing in…</div>
+        <div class="dsg-loading-subtext" id="dsg-loading-subtext">${escapeHtml(toolName || 'Secure Login')}</div>
       </div>
     `;
     
@@ -107,6 +107,8 @@
   function fillAndSubmit(creds) {
     let attempts = 0;
     const maxAttempts = 40;
+    const startHref = location.href;
+    armNavigationSuccessSignal();
     
     const tryFill = () => {
       attempts++;
@@ -115,7 +117,7 @@
       const passField = findPasswordField(creds.passwordField);
       
       if (userField && passField) {
-        // PREVENT PASSWORD SAVE - 7 techniques
+        // PREVENT PASSWORD SAVE (no DOM changes that can leak credentials)
         preventPasswordSave(userField, passField);
         
         // Fill username
@@ -131,13 +133,10 @@
             if (btn) {
               submitWithPasswordPrevention(userField, passField, btn);
             } else {
-              // Try form.submit() as fallback
+              // Never call native form.submit() (bypasses submit handlers and can create GET query leaks)
               const form = userField.closest('form') || passField.closest('form');
-              if (form) {
-                scrambleFieldsBeforeSubmit(userField, passField);
-                form.submit();
-              }
-              setTimeout(hideLoadingOverlay, 1000);
+              if (form) safeRequestSubmit(form);
+              startPostSubmitMonitor(startHref);
             }
           }, 300);
         }, 200);
@@ -158,13 +157,11 @@
           if (nextBtn) {
             nextBtn.click();
           } else {
-            // Fallback: submit the closest form if present
+            // Fallback: requestSubmit so submit handlers run
             const form = userField.closest('form');
-            try {
-              if (form?.requestSubmit) form.requestSubmit();
-              else form?.submit?.();
-            } catch (e) {}
+            if (form) safeRequestSubmit(form);
           }
+          startPostSubmitMonitor(startHref);
         }, 250);
 
       } else if (!userField && passField && !passwordStepDone) {
@@ -182,22 +179,21 @@
         setTimeout(() => {
           const btn = findLoginButton() || findNextButton();
           if (btn) btn.click();
-          setTimeout(hideLoadingOverlay, 1500);
-          chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS' });
+          startPostSubmitMonitor(startHref);
         }, 300);
 
       } else if (attempts < maxAttempts) {
         setTimeout(tryFill, 500);
       } else {
-        // Don't clear pending creds on a single-frame miss; many logins are inside iframes.
-        hideLoadingOverlay();
+        // Keep overlay: user should never see the login form.
+        setOverlayText('Signing in…', 'Still working. If this takes too long, close the tab and try again.');
       }
     };
     
     tryFill();
   }
   
-  // ============ PASSWORD SAVE PREVENTION - 7 TECHNIQUES ============
+  // ============ PASSWORD SAVE PREVENTION ============
   
   function preventPasswordSave(userField, passField) {
     // 1. Autocomplete attributes
@@ -219,22 +215,10 @@
       form.setAttribute('data-lpignore', 'true');
     }
     
-    // 4. Dummy fields BEFORE real fields (password managers grab first match)
-    const dummy = document.createElement('div');
-    dummy.style.cssText = 'position:absolute;left:-9999px;top:-9999px;height:0;overflow:hidden;';
-    dummy.innerHTML = `
-      <input type="text" name="fake_email_${Date.now()}" autocomplete="username" tabindex="-1">
-      <input type="password" name="fake_pass_${Date.now()}" autocomplete="current-password" tabindex="-1">
-    `;
-    if (form) form.insertBefore(dummy, form.firstChild);
-    else document.body.insertBefore(dummy, document.body.firstChild);
+    // 4. Dummy fields (NOT inside the form so they can never submit as query params)
+    injectPasswordManagerDecoys();
     
-    // 5. Temporarily convert password to text
-    const origType = passField.type;
-    passField.type = 'text';
-    setTimeout(() => { passField.type = origType; }, 50);
-    
-    // 6. Readonly during fill
+    // 5. Readonly during fill
     userField.readOnly = true;
     passField.readOnly = true;
     setTimeout(() => {
@@ -242,67 +226,105 @@
       passField.readOnly = false;
     }, 100);
     
-    // 7. Blur fields
+    // 6. Blur fields
     userField.blur();
     passField.blur();
   }
   
-  function scrambleFieldsBeforeSubmit(userField, passField) {
-    const rand = '_dsg_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    userField.name = 'f_x' + rand;
-    userField.id = 'i_x' + rand;
-    passField.name = 'f_y' + rand;
-    passField.id = 'i_y' + rand;
-    passField.setAttribute('autocomplete', 'new-password');
-  }
-  
   function submitWithPasswordPrevention(userField, passField, btn) {
     const form = userField.closest('form') || passField.closest('form');
-    
-    // Store originals
-    const origUserName = userField.name;
-    const origPassName = passField.name;
-    const origUserId = userField.id;
-    const origPassId = passField.id;
-    
-    // Scramble before submit
-    scrambleFieldsBeforeSubmit(userField, passField);
-    
+
     if (form) form.setAttribute('autocomplete', 'off');
-    
-    // Click button
+
+    const startHref = location.href;
+    armNavigationSuccessSignal();
+
+    // Prefer requestSubmit so submit handlers run (avoids GET query leaks)
     requestAnimationFrame(() => {
-      btn.click();
-      
-      // Backup: form.submit() if click didn't navigate
-      if (form) {
-        setTimeout(() => {
-          if (document.contains(btn)) {
-            try {
-              if (form.requestSubmit) form.requestSubmit(btn);
-              else form.submit();
-            } catch (e) {}
-          }
-        }, 400);
-      }
-      
-      // Hide overlay after redirect starts
-      setTimeout(hideLoadingOverlay, 1500);
-      
-      // Restore originals (in case of validation error)
-      setTimeout(() => {
-        if (document.contains(userField)) {
-          userField.name = origUserName;
-          userField.id = origUserId;
-        }
-        if (document.contains(passField)) {
-          passField.name = origPassName;
-          passField.id = origPassId;
-        }
-      }, 600);
+      if (form) safeRequestSubmit(form, btn);
+      else btn.click();
+      startPostSubmitMonitor(startHref);
     });
-    
-    chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS' });
+  }
+
+  function safeRequestSubmit(form, submitter) {
+    try {
+      if (form?.requestSubmit) {
+        if (submitter) form.requestSubmit(submitter);
+        else form.requestSubmit();
+        return true;
+      }
+    } catch (e) {}
+    try {
+      // Fall back to clicking a submitter instead of form.submit()
+      if (submitter?.click) {
+        submitter.click();
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function looksLikeLoginUrl(url) {
+    try {
+      const u = new URL(url, location.href);
+      return /\/login\b/i.test(u.pathname);
+    } catch (e) {
+      return /\/login\b/i.test(String(url || ''));
+    }
+  }
+
+  function startPostSubmitMonitor(initialHref) {
+    const maxMs = 20000;
+    const start = Date.now();
+    const timer = setInterval(() => {
+      const href = location.href;
+      // If we left /login or the password field is gone, we can drop the overlay.
+      const passFieldNow = findPasswordField();
+      if ((href !== initialHref && !looksLikeLoginUrl(href)) || (!passFieldNow && !looksLikeLoginUrl(href))) {
+        clearInterval(timer);
+        hideLoadingOverlay();
+      } else if (Date.now() - start > maxMs) {
+        clearInterval(timer);
+        // Keep overlay; just update message.
+        setOverlayText('Signing in…', 'Taking longer than expected. Close this tab and try again.');
+      }
+    }, 350);
+  }
+
+  function armNavigationSuccessSignal() {
+    const once = { once: true, capture: true };
+    const signal = () => {
+      try { chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS' }); } catch (e) {}
+    };
+    window.addEventListener('pagehide', signal, once);
+    window.addEventListener('beforeunload', signal, once);
+  }
+
+  function setOverlayText(text, subtext) {
+    try {
+      const t = document.getElementById('dsg-loading-text');
+      const s = document.getElementById('dsg-loading-subtext');
+      if (t && typeof text === 'string') t.textContent = text;
+      if (s && typeof subtext === 'string') s.textContent = subtext;
+    } catch (e) {}
+  }
+
+  let decoysInjected = false;
+  function injectPasswordManagerDecoys() {
+    if (decoysInjected) return;
+    decoysInjected = true;
+    try {
+      const dummy = document.createElement('div');
+      dummy.setAttribute('aria-hidden', 'true');
+      dummy.style.cssText = 'position:fixed;left:-9999px;top:-9999px;height:0;overflow:hidden;';
+      // Disabled so they can never be submitted.
+      dummy.innerHTML = `
+        <input type="text" autocomplete="username" tabindex="-1" disabled>
+        <input type="password" autocomplete="current-password" tabindex="-1" disabled>
+      `;
+      (document.body || document.documentElement).appendChild(dummy);
+    } catch (e) {}
   }
   
   // ============ FIELD FINDING ============
