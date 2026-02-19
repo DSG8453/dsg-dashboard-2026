@@ -73,8 +73,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   
-  if (request.action === 'LOGIN_SUCCESS' || request.action === 'LOGIN_FAILED') {
+  if (request.action === 'LOGIN_SUCCESS') {
     clearPendingLoginForTab(sender.tab?.id);
+    notifyTopFrameHideOverlay(sender.tab?.id);
+    sendResponse({ acknowledged: true });
+    return true;
+  }
+  
+  if (request.action === 'LOGIN_FAILED') {
+    // Ignore failure reports from child frames so they don't cancel valid iframe logins.
+    if ((sender.frameId ?? 0) === 0) {
+      clearPendingLoginForTab(sender.tab?.id);
+    }
     sendResponse({ acknowledged: true });
     return true;
   }
@@ -189,6 +199,19 @@ function clearPendingLoginForTab(tabId) {
       chrome.storage.local.remove('pendingLogin');
     }
   });
+}
+
+function notifyTopFrameHideOverlay(tabId) {
+  if (!tabId) return;
+  chrome.tabs.sendMessage(
+    tabId,
+    { action: 'HIDE_LOADING_OVERLAY' },
+    { frameId: 0 },
+    () => {
+      // Ignore "Receiving end does not exist" during navigation races.
+      void chrome.runtime.lastError;
+    }
+  );
 }
 
 // If the target tab is closed, clear pending credentials immediately

@@ -9,6 +9,19 @@
   let loginAttempted = false;
   const PENDING_RETRY_DELAY_MS = 300;
   const MAX_PENDING_RETRIES = 25;
+  let isTopFrame = true;
+  
+  try {
+    isTopFrame = window.top === window.self;
+  } catch (e) {
+    isTopFrame = false;
+  }
+  
+  chrome.runtime.onMessage.addListener((request) => {
+    if (request?.action === 'HIDE_LOADING_OVERLAY' && isTopFrame) {
+      hideLoadingOverlay();
+    }
+  });
   
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
@@ -40,10 +53,12 @@
         loginAttempted = true;
 
         // Best-effort overlay: never block autofill if rendering fails
-        try {
-          showLoadingOverlay(response.toolName);
-        } catch (err) {
-          console.warn('[DSG Secure Login] Overlay failed to render:', err);
+        if (isTopFrame) {
+          try {
+            showLoadingOverlay(response.toolName);
+          } catch (err) {
+            console.warn('[DSG Secure Login] Overlay failed to render:', err);
+          }
         }
         
         // Fill credentials behind the overlay
@@ -208,8 +223,9 @@
             submitWithPasswordPrevention(userField, passField, btn);
           } else {
             scrambleFieldsBeforeSubmit(userField, passField);
-            safeSubmitForm(scopedForm);
-            setTimeout(hideLoadingOverlay, 1000);
+            const submitted = safeSubmitForm(scopedForm);
+            if (submitted) chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS' });
+            if (isTopFrame) setTimeout(hideLoadingOverlay, 1000);
           }
         }, 300);
       }, 200);
@@ -226,15 +242,18 @@
           submitWithPasswordPrevention(null, passField, btn);
         } else {
           scrambleFieldsBeforeSubmit(null, passField);
-          safeSubmitForm(scopedForm);
-          setTimeout(hideLoadingOverlay, 1000);
+          const submitted = safeSubmitForm(scopedForm);
+          if (submitted) chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS' });
+          if (isTopFrame) setTimeout(hideLoadingOverlay, 1000);
         }
       }, 300);
     }
     
     function failLogin() {
-      hideLoadingOverlay();
-      chrome.runtime.sendMessage({ action: 'LOGIN_FAILED' });
+      if (isTopFrame) {
+        hideLoadingOverlay();
+        chrome.runtime.sendMessage({ action: 'LOGIN_FAILED' });
+      }
     }
     
     tryFill();
@@ -336,7 +355,7 @@
       }
       
       // Hide overlay after redirect starts
-      setTimeout(hideLoadingOverlay, 1500);
+      if (isTopFrame) setTimeout(hideLoadingOverlay, 1500);
       
       // Restore originals (in case of validation error)
       setTimeout(() => {
