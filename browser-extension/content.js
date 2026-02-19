@@ -8,6 +8,8 @@
   let loadingOverlay = null;
   let loginAttempted = false;
   let overlayShown = false;
+  let usernameStepDone = false;
+  let passwordStepDone = false;
   
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
@@ -140,6 +142,50 @@
           }, 300);
         }, 200);
         
+      } else if (userField && !passField && !usernameStepDone) {
+        // Two-step logins: username first, then password on next screen.
+        usernameStepDone = true;
+        try {
+          userField.setAttribute('autocomplete', 'off');
+          userField.setAttribute('data-lpignore', 'true');
+          userField.setAttribute('data-1p-ignore', 'true');
+          userField.setAttribute('data-bwignore', 'true');
+        } catch (e) {}
+        fillInput(userField, creds.username);
+
+        setTimeout(() => {
+          const nextBtn = findNextButton();
+          if (nextBtn) {
+            nextBtn.click();
+          } else {
+            // Fallback: submit the closest form if present
+            const form = userField.closest('form');
+            try {
+              if (form?.requestSubmit) form.requestSubmit();
+              else form?.submit?.();
+            } catch (e) {}
+          }
+        }, 250);
+
+      } else if (!userField && passField && !passwordStepDone) {
+        // Password-only step (username carried over from previous step/session)
+        passwordStepDone = true;
+        // Try to prevent password save even without a username field
+        try {
+          passField.setAttribute('autocomplete', 'new-password');
+          passField.setAttribute('data-lpignore', 'true');
+          passField.setAttribute('data-1p-ignore', 'true');
+          passField.setAttribute('data-bwignore', 'true');
+        } catch (e) {}
+        fillInput(passField, creds.password);
+
+        setTimeout(() => {
+          const btn = findLoginButton() || findNextButton();
+          if (btn) btn.click();
+          setTimeout(hideLoadingOverlay, 1500);
+          chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS' });
+        }, 300);
+
       } else if (attempts < maxAttempts) {
         setTimeout(tryFill, 500);
       } else {
@@ -362,6 +408,41 @@
       }
     }
     
+    return null;
+  }
+
+  function findNextButton() {
+    const selectors = [
+      'button[type="submit"]',
+      'input[type="submit"]',
+      'button[id*="next" i]',
+      'button[class*="next" i]',
+      'button[id*="continue" i]',
+      'button[class*="continue" i]',
+      'button[id*="verify" i]',
+      'button[class*="verify" i]',
+      'form button:not([type="button"])'
+    ];
+
+    for (const sel of selectors) {
+      try {
+        const el = document.querySelector(sel);
+        if (el && isVisible(el) && !isSkipButton(el)) return el;
+      } catch (e) {}
+    }
+
+    const btns = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
+    for (const btn of btns) {
+      const text = (btn.textContent || btn.value || '').toLowerCase();
+      if (
+        (text.includes('next') || text.includes('continue') || text.includes('verify')) &&
+        isVisible(btn) &&
+        !isSkipButton(btn)
+      ) {
+        return btn;
+      }
+    }
+
     return null;
   }
   

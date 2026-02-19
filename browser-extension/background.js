@@ -36,6 +36,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const pending = data.pendingLogin;
       const senderTabId = sender?.tab?.id;
       const senderUrl = sender?.tab?.url;
+      // If we opened the tab, prefer tabId match even across redirects/SSO domains.
+      if (pending?.tabId && senderTabId && pending.tabId === senderTabId) {
+        sendResponse(pending);
+        return;
+      }
       if (
         pending &&
         isUrlMatch(pending.url, senderUrl) &&
@@ -59,8 +64,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const senderUrl = sender?.tab?.url;
       if (
         pending &&
-        isUrlMatch(pending.url, senderUrl) &&
-        (!pending.tabId || (senderTabId && pending.tabId === senderTabId))
+        (
+          (pending.tabId && senderTabId && pending.tabId === senderTabId) ||
+          (isUrlMatch(pending.url, senderUrl) && (!pending.tabId || (senderTabId && pending.tabId === senderTabId)))
+        )
       ) {
         chrome.storage.local.remove('pendingLogin', () => sendResponse({ success: true }));
       } else {
@@ -77,8 +84,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const senderUrl = sender?.tab?.url;
       if (
         pending &&
-        isUrlMatch(pending.url, senderUrl) &&
-        (!pending.tabId || (senderTabId && pending.tabId === senderTabId))
+        (
+          (pending.tabId && senderTabId && pending.tabId === senderTabId) ||
+          (isUrlMatch(pending.url, senderUrl) && (!pending.tabId || (senderTabId && pending.tabId === senderTabId)))
+        )
       ) {
         chrome.storage.local.remove('pendingLogin', () => sendResponse({ acknowledged: true, cleared: true }));
       } else {
