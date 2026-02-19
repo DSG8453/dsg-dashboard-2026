@@ -55,6 +55,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   
+  if (request.action === 'LOGIN_NEEDS_MANUAL') {
+    // CAPTCHA or 2FA detected - credentials filled, user needs to complete manually
+    // Clear pending login since credentials are already filled
+    chrome.storage.local.remove('pendingLogin');
+    sendResponse({ acknowledged: true, reason: request.reason });
+    return true;
+  }
+  
   return false;
 });
 

@@ -1,6 +1,7 @@
-// DSG Transport Secure Login - Content Script
+// DSG Transport Secure Login - Content Script v1.3.7
 // Shows OVERLAY to hide login form, fills credentials, auto-submits
-// User NEVER sees login form - only sees DSG loading screen
+// DETECTS CAPTCHA/2FA: If found, reveals page for user to complete manually
+// User NEVER sees credentials - only masked dots (••••••••)
 
 (function() {
   'use strict';
@@ -15,6 +16,13 @@
   }
   
   function init() {
+    // Check if this is a 2FA page (no username/password fields, has code input)
+    if (detect2FAPage()) {
+      // This is a 2FA page after login - just hide any overlay and let user proceed
+      hideLoadingOverlay();
+      return;
+    }
+    
     chrome.runtime.sendMessage({ action: 'GET_PENDING_LOGIN' }, (pending) => {
       if (chrome.runtime.lastError || !pending || loginAttempted) return;
       loginAttempted = true;
@@ -27,11 +35,142 @@
     });
   }
   
-  // LOADING OVERLAY - Covers entire screen so user never sees login form
+  // ============ CAPTCHA DETECTION ============
+  
+  function detectCaptcha() {
+    const captchaSelectors = [
+      // Google reCAPTCHA
+      'iframe[src*="recaptcha"]',
+      'iframe[src*="google.com/recaptcha"]',
+      '.g-recaptcha',
+      '#g-recaptcha',
+      '[data-sitekey]',
+      // hCaptcha
+      'iframe[src*="hcaptcha"]',
+      '.h-captcha',
+      // Generic CAPTCHA
+      '[class*="captcha" i]',
+      '[id*="captcha" i]',
+      'img[src*="captcha" i]',
+      'input[name*="captcha" i]',
+      // Cloudflare
+      'iframe[src*="challenges.cloudflare"]',
+      '#cf-turnstile',
+      // FunCaptcha
+      'iframe[src*="funcaptcha"]',
+      // Text-based detection
+      '[aria-label*="captcha" i]',
+      '[title*="captcha" i]'
+    ];
+    
+    for (const selector of captchaSelectors) {
+      try {
+        const el = document.querySelector(selector);
+        if (el && isVisible(el)) {
+          return true;
+        }
+      } catch (e) {}
+    }
+    
+    // Check for CAPTCHA text on page
+    const bodyText = document.body?.innerText?.toLowerCase() || '';
+    if (bodyText.includes('complete the captcha') || 
+        bodyText.includes('prove you are human') ||
+        bodyText.includes('security check') ||
+        bodyText.includes('verify you are not a robot')) {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  // ============ 2FA DETECTION ============
+  
+  function detect2FAPage() {
+    // Check if this looks like a 2FA/verification page (NO password field, HAS code input)
+    const hasPasswordField = document.querySelector('input[type="password"]');
+    if (hasPasswordField) return false; // Not a 2FA page if password field exists
+    
+    const twoFASelectors = [
+      // Code input fields
+      'input[name*="code" i]',
+      'input[name*="otp" i]',
+      'input[name*="2fa" i]',
+      'input[name*="totp" i]',
+      'input[name*="token" i]',
+      'input[name*="verification" i]',
+      'input[name*="mfa" i]',
+      'input[id*="code" i]',
+      'input[id*="otp" i]',
+      'input[id*="2fa" i]',
+      'input[placeholder*="code" i]',
+      'input[placeholder*="verification" i]',
+      'input[autocomplete="one-time-code"]',
+      // Multiple single-digit inputs (common 2FA pattern)
+      'input[maxlength="1"]',
+      'input[maxlength="6"]'
+    ];
+    
+    for (const selector of twoFASelectors) {
+      try {
+        const el = document.querySelector(selector);
+        if (el && isVisible(el)) {
+          return true;
+        }
+      } catch (e) {}
+    }
+    
+    // Check for 2FA text on page
+    const bodyText = document.body?.innerText?.toLowerCase() || '';
+    const twoFAPhrases = [
+      'verification code',
+      'enter the code',
+      'two-factor',
+      'two factor',
+      '2-factor',
+      '2fa',
+      'authenticator',
+      'sent to your phone',
+      'sent to your email',
+      'one-time password',
+      'one time password',
+      'security code',
+      'enter code',
+      'verify your identity'
+    ];
+    
+    for (const phrase of twoFAPhrases) {
+      if (bodyText.includes(phrase)) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  
+  function detect2FAOnCurrentPage() {
+    // Lighter check for 2FA elements on login page (before submit)
+    const twoFASelectors = [
+      'input[name*="otp" i]',
+      'input[name*="2fa" i]',
+      'input[name*="totp" i]',
+      'input[autocomplete="one-time-code"]'
+    ];
+    
+    for (const selector of twoFASelectors) {
+      try {
+        const el = document.querySelector(selector);
+        if (el && isVisible(el)) return true;
+      } catch (e) {}
+    }
+    return false;
+  }
+  
+  // ============ LOADING OVERLAY ============
+  
   function showLoadingOverlay(toolName) {
     if (loadingOverlay) return;
     
-    // Create overlay element
     loadingOverlay = document.createElement('div');
     loadingOverlay.id = 'dsg-loading-overlay';
     
@@ -49,7 +188,6 @@
       opacity: 1 !important;
     `;
     
-    // Add loading content
     loadingOverlay.innerHTML = `
       <div class="dsg-loading-content">
         <div class="dsg-loading-spinner"></div>
@@ -86,6 +224,15 @@
     document.body.appendChild(loadingOverlay);
   }
   
+  function updateOverlayMessage(message, submessage) {
+    if (loadingOverlay) {
+      const textEl = loadingOverlay.querySelector('.dsg-loading-text');
+      const subEl = loadingOverlay.querySelector('.dsg-loading-subtext');
+      if (textEl) textEl.textContent = message;
+      if (subEl) subEl.textContent = submessage;
+    }
+  }
+  
   function hideLoadingOverlay() {
     if (loadingOverlay) {
       loadingOverlay.style.opacity = '0';
@@ -97,6 +244,8 @@
       }, 300);
     }
   }
+  
+  // ============ MAIN FILL AND SUBMIT LOGIC ============
   
   function fillAndSubmit(creds) {
     let attempts = 0;
@@ -120,18 +269,41 @@
           fillInput(passField, creds.password);
           
           setTimeout(() => {
-            // Find and click login button
-            const btn = findLoginButton();
-            if (btn) {
-              submitWithPasswordPrevention(userField, passField, btn);
+            // CHECK FOR CAPTCHA OR 2FA
+            const hasCaptcha = detectCaptcha();
+            const has2FA = detect2FAOnCurrentPage();
+            
+            if (hasCaptcha || has2FA) {
+              // CAPTCHA/2FA DETECTED: Reveal page for user to complete
+              // Credentials are filled but masked as ••••••••
+              updateOverlayMessage(
+                hasCaptcha ? 'CAPTCHA detected' : '2FA detected',
+                'Please complete verification and click Login'
+              );
+              
+              setTimeout(() => {
+                hideLoadingOverlay();
+                // Notify background that manual intervention needed
+                chrome.runtime.sendMessage({ 
+                  action: 'LOGIN_NEEDS_MANUAL',
+                  reason: hasCaptcha ? 'captcha' : '2fa'
+                });
+              }, 1000);
+              
             } else {
-              // Try form.submit() as fallback
-              const form = userField.closest('form') || passField.closest('form');
-              if (form) {
-                scrambleFieldsBeforeSubmit(userField, passField);
-                form.submit();
+              // NO CAPTCHA/2FA: Proceed with auto-submit
+              const btn = findLoginButton();
+              if (btn) {
+                submitWithPasswordPrevention(userField, passField, btn);
+              } else {
+                // Try form.submit() as fallback
+                const form = userField.closest('form') || passField.closest('form');
+                if (form) {
+                  scrambleFieldsBeforeSubmit(userField, passField);
+                  form.submit();
+                }
+                setTimeout(hideLoadingOverlay, 1000);
               }
-              setTimeout(hideLoadingOverlay, 1000);
             }
           }, 300);
         }, 200);
