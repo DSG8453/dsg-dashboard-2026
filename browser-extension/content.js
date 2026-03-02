@@ -252,7 +252,9 @@
     function failLogin() {
       if (isTopFrame) {
         hideLoadingOverlay();
-        chrome.runtime.sendMessage({ action: 'LOGIN_FAILED' });
+        // Do not clear pending login from top-frame timeout.
+        // Some providers (e.g., Zoho) render login UI in child frames that may
+        // complete slightly later than the top frame detection loop.
       }
     }
     
@@ -516,10 +518,14 @@
       'input[placeholder*="user" i]',
       'input[name="Email"]',
       'input[name="LOGIN_ID"]',
+      'input[id="login_id"]',
+      'input[name="lid"]',
+      'input[id="lid"]',
       'input[name="loginfmt"]',
       'input[name="identifier"]',
       'input[aria-label*="email" i]',
       'input[aria-label*="username" i]',
+      'input[data-zcqa*="login" i]',
       'form input[type="text"]:first-of-type',
       'textarea'
     ];
@@ -544,7 +550,11 @@
       'input[id*="pass" i]',
       'input[autocomplete="current-password"]',
       'input[autocomplete="new-password"]',
-      'input[name="PASSWORD"]'
+      'input[name="PASSWORD"]',
+      'input[id="password"]',
+      'input[name="pwd"]',
+      'input[id="pwd"]',
+      'input[data-zcqa*="pass" i]'
     ];
     
     const matched = querySelectorFromRoots(selectors, el => isVisible(el) && isPasswordLikeField(el));
@@ -563,9 +573,12 @@
       'button[id*="signin" i]',
       'button[class*="login" i]',
       'button[class*="signin" i]',
+      'button[id*="next" i]',
       'input[name*="btnLogin" i]',
       'input[id*="btnLogin" i]',
       'input[name*="btnSubmit" i]',
+      '#nextbtn',
+      '#submit_but',
       '.btn-login', '.btn-signin',
       'form button:not([type="button"])'
     ];
@@ -609,12 +622,27 @@
   function findNextButton(contextField) {
     const preferredText = ['next', 'continue', 'proceed', 'verify', 'go'];
     const form = contextField ? contextField.closest('form') : null;
+    const explicitSelectors = [
+      '#nextbtn',
+      'button#nextbtn',
+      'input#nextbtn',
+      '#submit_but',
+      'button#submit_but',
+      'input#submit_but',
+      '[data-zcqa*="next" i]'
+    ];
+    
+    const explicitMatch = querySelectorFromRoots(
+      explicitSelectors,
+      el => isVisible(el) && !el.disabled && !isSkipButton(el)
+    );
+    if (explicitMatch) return explicitMatch;
     
     const candidates = [];
     if (form) {
-      candidates.push(...Array.from(form.querySelectorAll('button, input[type="submit"], input[type="button"]')));
+      candidates.push(...Array.from(form.querySelectorAll('button, input[type="submit"], input[type="button"], [role="button"], a, span')));
     }
-    candidates.push(...queryAllFromRoots('button, input[type="submit"], input[type="button"]'));
+    candidates.push(...queryAllFromRoots('button, input[type="submit"], input[type="button"], [role="button"], a, span'));
     
     const seen = new Set();
     for (const btn of candidates) {
