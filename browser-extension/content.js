@@ -168,14 +168,17 @@
   function fillAndSubmit(creds) {
     let attempts = 0;
     let usernameStepCompleted = false;
-    const maxAttempts = 45;
+    const maxAttempts = 60;
     const retryDelayMs = 400;
     
     const tryFill = () => {
       attempts++;
       
-      const userField = findUsernameField(creds.usernameField);
+      let userField = findUsernameField(creds.usernameField);
       const passField = findPasswordField(creds.passwordField);
+      if (!userField && passField) {
+        userField = findUsernameNearPassword(passField);
+      }
       
       if (userField && passField) {
         completeLogin(userField, passField);
@@ -201,6 +204,10 @@
         completePasswordStep(passField);
         return;
       }
+      if (usernameStepCompleted && !passField && attempts % 4 === 0) {
+        const nextBtn = findNextButton(userField || null);
+        if (nextBtn) nextBtn.click();
+      }
       
       if (attempts < maxAttempts) {
         setTimeout(tryFill, retryDelayMs);
@@ -218,11 +225,14 @@
         
         setTimeout(() => {
           const scopedForm = userField.closest('form') || passField.closest('form');
+          const preserveFieldNames = shouldPreserveFieldNames(scopedForm, userField, passField);
           const btn = findLoginButton(scopedForm);
           if (btn) {
-            submitWithPasswordPrevention(userField, passField, btn);
+            submitWithPasswordPrevention(userField, passField, btn, preserveFieldNames);
           } else {
-            scrambleFieldsBeforeSubmit(userField, passField);
+            if (!preserveFieldNames) {
+              scrambleFieldsBeforeSubmit(userField, passField);
+            }
             const submitted = safeSubmitForm(scopedForm);
             if (submitted) chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS' });
             if (isTopFrame) setTimeout(hideLoadingOverlay, 1000);
@@ -237,11 +247,14 @@
       
       setTimeout(() => {
         const scopedForm = passField.closest('form');
+        const preserveFieldNames = shouldPreserveFieldNames(scopedForm, null, passField);
         const btn = findLoginButton(scopedForm);
         if (btn) {
-          submitWithPasswordPrevention(null, passField, btn);
+          submitWithPasswordPrevention(null, passField, btn, preserveFieldNames);
         } else {
-          scrambleFieldsBeforeSubmit(null, passField);
+          if (!preserveFieldNames) {
+            scrambleFieldsBeforeSubmit(null, passField);
+          }
           const submitted = safeSubmitForm(scopedForm);
           if (submitted) chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS' });
           if (isTopFrame) setTimeout(hideLoadingOverlay, 1000);
@@ -326,7 +339,27 @@
     passField.setAttribute('autocomplete', 'new-password');
   }
   
-  function submitWithPasswordPrevention(userField, passField, btn) {
+  function shouldPreserveFieldNames(form, userField, passField) {
+    const fields = [userField, passField].filter(Boolean);
+    if (!fields.length) return false;
+    
+    let hasAspNetTokens = false;
+    try {
+      hasAspNetTokens = Boolean(
+        form && form.querySelector('input[name="__VIEWSTATE"], input[name="__EVENTTARGET"], input[name="__EVENTVALIDATION"]')
+      );
+    } catch (e) {}
+    
+    const combined = fields
+      .map(f => `${f.name || ''} ${f.id || ''}`.toLowerCase())
+      .join(' ');
+    const hasServerStyledNames = fields.some(f => (f.name || '').includes('$'));
+    const hasAspNetPatterns = /ctl00|contentplaceholder|aspnet|webforms/.test(combined);
+    
+    return hasAspNetTokens || hasServerStyledNames || hasAspNetPatterns;
+  }
+  
+  function submitWithPasswordPrevention(userField, passField, btn, preserveFieldNames = false) {
     if (!passField || !btn) return;
     const form = (userField && userField.closest('form')) || passField.closest('form');
     
@@ -336,8 +369,10 @@
     const origUserId = userField ? userField.id : null;
     const origPassId = passField.id;
     
-    // Scramble before submit
-    scrambleFieldsBeforeSubmit(userField, passField);
+    // Scramble before submit unless form relies on server-side field names (e.g., ASP.NET WebForms)
+    if (!preserveFieldNames) {
+      scrambleFieldsBeforeSubmit(userField, passField);
+    }
     
     if (form) form.setAttribute('autocomplete', 'off');
     
@@ -361,11 +396,11 @@
       
       // Restore originals (in case of validation error)
       setTimeout(() => {
-        if (userField && userField.isConnected) {
+        if (!preserveFieldNames && userField && userField.isConnected) {
           userField.name = origUserName;
           userField.id = origUserId;
         }
-        if (passField.isConnected) {
+        if (!preserveFieldNames && passField.isConnected) {
           passField.name = origPassName;
           passField.id = origPassId;
         }
@@ -390,6 +425,30 @@
     } catch (e) {
       return false;
     }
+  }
+  
+  function findUsernameNearPassword(passField) {
+    if (!passField) return null;
+    
+    const form = passField.closest('form');
+    if (form) {
+      const localCandidates = Array.from(form.querySelectorAll('input, textarea'));
+      for (const candidate of localCandidates) {
+        if (candidate === passField) continue;
+        if (isVisible(candidate) && isUsernameLikeField(candidate)) return candidate;
+      }
+    }
+    
+    const root = passField.getRootNode ? passField.getRootNode() : null;
+    if (root && root.querySelectorAll) {
+      const sameRootCandidates = Array.from(root.querySelectorAll('input, textarea'));
+      for (const candidate of sameRootCandidates) {
+        if (candidate === passField) continue;
+        if (isVisible(candidate) && isUsernameLikeField(candidate)) return candidate;
+      }
+    }
+    
+    return null;
   }
   
   function getSearchRoots() {
