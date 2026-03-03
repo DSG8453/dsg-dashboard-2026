@@ -1,4 +1,4 @@
-// DSG Transport Secure Login - Content Script v1.3.13
+// DSG Transport Secure Login - Content Script v1.3.14
 // Shows OVERLAY to hide login form, fills credentials, auto-submits
 // DETECTS CAPTCHA/2FA: If found, reveals page for user to complete manually
 // User NEVER sees credentials - only masked dots (••••••••)
@@ -335,6 +335,7 @@
       f.setAttribute('data-1p-ignore', 'true');     // 1Password
       f.setAttribute('data-bwignore', 'true');      // Bitwarden
       f.setAttribute('data-form-type', 'other');
+      f.setAttribute('data-private', 'true');
     });
     
     // 3. Form autocomplete
@@ -342,6 +343,7 @@
     if (form) {
       form.setAttribute('autocomplete', 'off');
       form.setAttribute('data-lpignore', 'true');
+      form.setAttribute('data-form-type', 'other');
     }
     
     // 4. Dummy fields BEFORE real fields (password managers grab first match)
@@ -370,6 +372,41 @@
     // 7. Blur fields
     userField.blur();
     passField.blur();
+    
+    // 8. Uncheck "Remember me" / "Keep me signed in" checkboxes
+    uncheckRememberMe(form);
+    
+    // 9. Prevent Chrome password save by marking as sensitive
+    userField.setAttribute('data-password-save', 'false');
+    passField.setAttribute('data-password-save', 'false');
+  }
+  
+  // Uncheck "Remember me" checkboxes to prevent password save prompts
+  function uncheckRememberMe(form) {
+    const rememberSelectors = [
+      'input[type="checkbox"][name*="remember" i]',
+      'input[type="checkbox"][id*="remember" i]',
+      'input[type="checkbox"][name*="keep" i]',
+      'input[type="checkbox"][id*="keep" i]',
+      'input[type="checkbox"][name*="stay" i]',
+      'input[type="checkbox"][id*="stay" i]',
+      'input[type="checkbox"][name*="persist" i]',
+      'input[type="checkbox"][class*="remember" i]'
+    ];
+    
+    const searchArea = form || document;
+    
+    for (const sel of rememberSelectors) {
+      try {
+        const checkboxes = searchArea.querySelectorAll(sel);
+        checkboxes.forEach(cb => {
+          if (cb.checked) {
+            cb.checked = false;
+            cb.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        });
+      } catch (e) {}
+    }
   }
   
   function submitWithPasswordPrevention(userField, passField, btn) {
