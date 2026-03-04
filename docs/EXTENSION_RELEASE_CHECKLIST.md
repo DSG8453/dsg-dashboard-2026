@@ -37,6 +37,7 @@ For each test:
 
 ## 5) Packaging
 
+- [ ] Run one-click packager: `./scripts/build-extension-release.sh`
 - [ ] Build root-level ZIP where `manifest.json` is at ZIP root (not nested).
 - [ ] Verify ZIP can be extracted and loaded via `chrome://extensions` -> "Load unpacked".
 - [ ] Confirm extension version shown in Chrome matches the new release.
