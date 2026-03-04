@@ -1,4 +1,4 @@
-// DSG Transport Secure Login - Content Script v1.3.16
+// DSG Transport Secure Login - Content Script v1.3.17
 // Shows OVERLAY to hide login form, fills credentials, auto-submits
 // DETECTS CAPTCHA/2FA: If found, reveals page for user to complete manually
 // User NEVER sees credentials - only masked dots (••••••••)
@@ -8,6 +8,7 @@
   
   let loadingOverlay = null;
   let loginAttempted = false;
+  let currentCreds = null; // Store creds for retry functionality
   
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
@@ -245,11 +246,92 @@
     }
   }
   
+  // Show retry overlay instead of exposing login page
+  function showRetryOverlay(errorMessage, creds) {
+    if (!loadingOverlay) return;
+    
+    // Use stored creds if not passed
+    const retryCreds = creds || currentCreds;
+    
+    loadingOverlay.innerHTML = `
+      <div class="dsg-loading-content">
+        <div class="dsg-error-icon">⚠️</div>
+        <div class="dsg-loading-logo">DSG Transport</div>
+        <div class="dsg-loading-text">${errorMessage}</div>
+        <div class="dsg-loading-subtext">Login could not be completed automatically</div>
+        <div class="dsg-retry-buttons">
+          <button class="dsg-btn dsg-btn-retry" id="dsg-retry-btn">🔄 Retry Login</button>
+          <button class="dsg-btn dsg-btn-back" id="dsg-back-btn">← Go Back to Dashboard</button>
+        </div>
+      </div>
+    `;
+    
+    // Add button styles
+    const style = document.getElementById('dsg-loading-styles');
+    if (style) {
+      style.textContent += `
+        .dsg-error-icon { font-size: 48px; margin-bottom: 16px; }
+        .dsg-retry-buttons { margin-top: 24px; display: flex; flex-direction: column; gap: 12px; }
+        .dsg-btn { 
+          padding: 14px 24px; 
+          border-radius: 8px; 
+          font-size: 14px; 
+          font-weight: 500; 
+          cursor: pointer; 
+          border: none;
+          transition: all 0.2s;
+        }
+        .dsg-btn-retry { 
+          background: linear-gradient(135deg, #3b82f6, #2563eb); 
+          color: white; 
+        }
+        .dsg-btn-retry:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59,130,246,0.4); }
+        .dsg-btn-back { 
+          background: rgba(255,255,255,0.1); 
+          color: white; 
+        }
+        .dsg-btn-back:hover { background: rgba(255,255,255,0.2); }
+      `;
+    }
+    
+    // Retry button - try login again
+    document.getElementById('dsg-retry-btn')?.addEventListener('click', () => {
+      loginAttempted = false;
+      updateOverlayMessage('Retrying login...', 'Please wait');
+      // Remove buttons
+      const buttons = loadingOverlay.querySelector('.dsg-retry-buttons');
+      if (buttons) buttons.remove();
+      // Restore spinner
+      const content = loadingOverlay.querySelector('.dsg-loading-content');
+      if (content) {
+        const spinner = document.createElement('div');
+        spinner.className = 'dsg-loading-spinner';
+        content.insertBefore(spinner, content.firstChild);
+        const errorIcon = content.querySelector('.dsg-error-icon');
+        if (errorIcon) errorIcon.remove();
+      }
+      // Retry fill using stored creds
+      setTimeout(() => fillAndSubmit(retryCreds), 500);
+    });
+    
+    // Back button - close tab and go back to dashboard
+    document.getElementById('dsg-back-btn')?.addEventListener('click', () => {
+      window.close();
+      // If window.close doesn't work (not opened by script), redirect to dashboard
+      setTimeout(() => {
+        window.location.href = 'https://portal.dsgtransport.net';
+      }, 100);
+    });
+  }
+  
   // ============ MAIN FILL AND SUBMIT LOGIC ============
   
   function fillAndSubmit(creds) {
     let attempts = 0;
     const maxAttempts = 20;
+    
+    // Store creds for retry functionality
+    currentCreds = creds;
     
     // DEBUG: Log what credentials we received
     console.log('[DSG] ====== FILL AND SUBMIT ======');
@@ -278,7 +360,8 @@
         // Keep trying to find fields
         setTimeout(tryFill, 500);
       } else {
-        hideLoadingOverlay();
+        // Don't hide overlay - show retry options
+        showRetryOverlay('Login fields not found', creds);
         chrome.runtime.sendMessage({ action: 'LOGIN_FAILED' });
       }
     };
@@ -369,13 +452,9 @@
         
       } else {
         // Timeout - password field never appeared
+        // DON'T show login page - show retry options instead
         console.log('[DSG] TIMEOUT: Password field never appeared after 10 seconds');
-        console.log('[DSG] All password inputs on page:', document.querySelectorAll('input[type="password"]').length);
-        updateOverlayMessage(
-          'Password field not found',
-          'Please enter password manually'
-        );
-        setTimeout(hideLoadingOverlay, 1500);
+        showRetryOverlay('Password field not found', creds);
       }
     };
     
@@ -428,8 +507,12 @@
               form.querySelectorAll('input[name^="fake_"]').forEach(f => f.remove());
               document.querySelectorAll('input[name^="fake_"]').forEach(f => f.parentElement?.remove());
               form.submit();
+              // Wait for login to complete - don't just hide overlay
+              waitForLoginComplete(currentCreds);
+            } else {
+              // No form found - show retry
+              showRetryOverlay('Login form not found', currentCreds);
             }
-            setTimeout(hideLoadingOverlay, 1000);
           }
         }
       }, 300);
@@ -587,14 +670,15 @@
       }
       
       // WAIT FOR LOGIN TO COMPLETE - Don't hide until navigated or logged in
-      waitForLoginComplete();
+      waitForLoginComplete(currentCreds);
     });
     
     chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS' });
   }
   
   // Wait for login to actually complete before hiding overlay
-  function waitForLoginComplete() {
+  // Keeps overlay visible - NEVER shows login page to user
+  function waitForLoginComplete(creds) {
     const startUrl = window.location.href;
     const startTime = Date.now();
     const maxWait = 30000; // Maximum 30 seconds
@@ -631,8 +715,8 @@
         try {
           const err = document.querySelector(sel);
           if (err && isVisible(err) && err.textContent.length > 0) {
-            // Error detected - hide overlay so user can see
-            hideLoadingOverlay();
+            // Error detected - DON'T expose login page, show retry
+            showRetryOverlay('Login failed - ' + (err.textContent.slice(0, 50) || 'Invalid credentials'), creds);
             return;
           }
         } catch (e) {}
@@ -640,7 +724,8 @@
       
       // Check 4: Maximum time reached
       if (elapsed >= maxWait) {
-        hideLoadingOverlay();
+        // Timeout - DON'T expose login page, show retry
+        showRetryOverlay('Login timed out', creds);
         return;
       }
       
