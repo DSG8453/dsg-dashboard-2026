@@ -1,4 +1,4 @@
-// DSG Transport Secure Login - Content Script v1.3.15
+// DSG Transport Secure Login - Content Script v1.3.16
 // Shows OVERLAY to hide login form, fills credentials, auto-submits
 // DETECTS CAPTCHA/2FA: If found, reveals page for user to complete manually
 // User NEVER sees credentials - only masked dots (••••••••)
@@ -251,6 +251,14 @@
     let attempts = 0;
     const maxAttempts = 20;
     
+    // DEBUG: Log what credentials we received
+    console.log('[DSG] ====== FILL AND SUBMIT ======');
+    console.log('[DSG] Username:', creds.username ? 'YES' : 'EMPTY');
+    console.log('[DSG] Password:', creds.password ? 'YES (' + creds.password.length + ' chars)' : 'EMPTY/MISSING');
+    console.log('[DSG] Username field selector:', creds.usernameField);
+    console.log('[DSG] Password field selector:', creds.passwordField);
+    console.log('[DSG] ==============================');
+    
     const tryFill = () => {
       attempts++;
       
@@ -280,6 +288,9 @@
   
   // Handle multi-step login (Zoho, Microsoft, Google) where password appears after email validation
   function handleMultiStepLogin(userField, creds) {
+    console.log('[DSG] Multi-step login detected - username field found, waiting for password field');
+    console.log('[DSG] Filling username:', creds.username ? '***' + creds.username.slice(-10) : 'EMPTY');
+    
     // Fill username first
     fillInput(userField, creds.username);
     
@@ -291,8 +302,11 @@
     // Check if there's a "Next" button to click
     const nextBtn = findNextButton();
     if (nextBtn) {
+      console.log('[DSG] Found "Next" button, clicking it');
       nextBtn.click();
       nextBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+    } else {
+      console.log('[DSG] No "Next" button found, waiting for password field to appear');
     }
     
     // Now wait for password field to appear
@@ -334,13 +348,19 @@
     let passwordAttempts = 0;
     const maxPasswordAttempts = 20; // 10 seconds max
     
+    console.log('[DSG] Waiting for password field to appear...');
+    console.log('[DSG] Password to fill:', creds.password ? 'YES (' + creds.password.length + ' chars)' : 'EMPTY/MISSING');
+    
     const checkForPassword = () => {
       passwordAttempts++;
       
       const passField = findPasswordField(creds.passwordField);
       
+      console.log('[DSG] Password field check #' + passwordAttempts + ':', passField ? 'FOUND' : 'NOT FOUND');
+      
       if (passField && isVisible(passField)) {
         // PASSWORD FIELD APPEARED! Complete the login
+        console.log('[DSG] Password field found and visible! Completing login...');
         completeLogin(userField, passField, creds);
         
       } else if (passwordAttempts < maxPasswordAttempts) {
@@ -349,7 +369,8 @@
         
       } else {
         // Timeout - password field never appeared
-        // Show the page so user can see what's happening
+        console.log('[DSG] TIMEOUT: Password field never appeared after 10 seconds');
+        console.log('[DSG] All password inputs on page:', document.querySelectorAll('input[type="password"]').length);
         updateOverlayMessage(
           'Password field not found',
           'Please enter password manually'
