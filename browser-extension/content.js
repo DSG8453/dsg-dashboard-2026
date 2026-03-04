@@ -1,40 +1,48 @@
 // DSG Transport Secure Login - Content Script
-// Shows OVERLAY to hide login form, fills credentials, auto-submits
-// User NEVER sees login form - only sees DSG loading screen
+// Covers the page, fills credentials, and submits automatically.
 
-(function() {
+(function () {
   'use strict';
-  
+
   let loadingOverlay = null;
   let loginAttempted = false;
-  
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', init, { once: true });
   } else {
     init();
   }
-  
+
   function init() {
     chrome.runtime.sendMessage({ action: 'GET_PENDING_LOGIN' }, (pending) => {
       if (chrome.runtime.lastError || !pending || loginAttempted) return;
       loginAttempted = true;
-      
-      // IMMEDIATELY show overlay - user never sees login form
-      showLoadingOverlay(pending.toolName);
-      
-      // Fill credentials behind the overlay
-      setTimeout(() => fillAndSubmit(pending), 500);
+      runSecureLogin(pending);
     });
   }
-  
-  // LOADING OVERLAY - Covers entire screen so user never sees login form
+
+  async function runSecureLogin(pending) {
+    showLoadingOverlay(pending.toolName);
+
+    try {
+      const success = await fillAndSubmit(pending);
+      chrome.runtime.sendMessage({ action: success ? 'LOGIN_SUCCESS' : 'LOGIN_FAILED' });
+
+      if (!success) {
+        hideLoadingOverlay();
+      }
+    } catch (error) {
+      console.error('[DSG] Secure login failed:', error);
+      chrome.runtime.sendMessage({ action: 'LOGIN_FAILED' });
+      hideLoadingOverlay();
+    }
+  }
+
   function showLoadingOverlay(toolName) {
     if (loadingOverlay) return;
-    
-    // 1. Autocomplete off
-    userField.setAttribute('autocomplete', 'off');
-    passField.setAttribute('autocomplete', 'new-password');
-    
+
+    loadingOverlay = document.createElement('div');
+    loadingOverlay.id = 'dsg-loading-overlay';
     loadingOverlay.style.cssText = `
       position: fixed !important;
       top: 0 !important;
@@ -47,119 +55,151 @@
       justify-content: center !important;
       z-index: 2147483647 !important;
       opacity: 1 !important;
+      pointer-events: all !important;
     `;
-    
-    const style = document.createElement('style');
-    style.id = 'dsg-loading-styles';
-    style.textContent = `
-      #dsg-loading-overlay * { box-sizing: border-box; }
-      .dsg-loading-content { text-align: center; color: white; font-family: system-ui, -apple-system, sans-serif; }
-      .dsg-loading-spinner {
-        width: 50px; height: 50px;
-        border: 4px solid rgba(255,255,255,0.2);
-        border-top-color: #3b82f6;
-        border-radius: 50%;
-        animation: dsg-spin 1s linear infinite;
-        margin: 0 auto 20px;
-      }
-      .dsg-loading-logo {
-        font-size: 28px; font-weight: 700; margin-bottom: 16px;
-        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      }
-      .dsg-loading-text { font-size: 18px; font-weight: 500; margin-bottom: 8px; color: #fff; }
-      .dsg-loading-subtext { font-size: 14px; color: #94a3b8; }
-      @keyframes dsg-spin { to { transform: rotate(360deg); } }
+
+    loadingOverlay.innerHTML = `
+      <div class="dsg-loading-content">
+        <div class="dsg-loading-spinner"></div>
+        <div class="dsg-loading-logo">DSG Transport</div>
+        <div class="dsg-loading-text">Connecting to ${escapeHtml(toolName || 'Tool')}...</div>
+        <div class="dsg-loading-subtext">Secure login in progress</div>
+      </div>
     `;
-    
-    document.head.appendChild(style);
-    document.body.appendChild(loadingOverlay);
-  }
-  
-  function hideLoadingOverlay() {
-    if (loadingOverlay) {
-      loadingOverlay.style.opacity = '0';
-      loadingOverlay.style.transition = 'opacity 0.3s ease';
-      setTimeout(() => {
-        loadingOverlay?.remove();
-        document.getElementById('dsg-loading-styles')?.remove();
-        loadingOverlay = null;
-      }, 300);
+
+    if (!document.getElementById('dsg-loading-styles')) {
+      const style = document.createElement('style');
+      style.id = 'dsg-loading-styles';
+      style.textContent = `
+        #dsg-loading-overlay * { box-sizing: border-box; }
+        .dsg-loading-content { text-align: center; color: white; font-family: system-ui, -apple-system, sans-serif; }
+        .dsg-loading-spinner {
+          width: 50px; height: 50px;
+          border: 4px solid rgba(255,255,255,0.2);
+          border-top-color: #3b82f6;
+          border-radius: 50%;
+          animation: dsg-spin 1s linear infinite;
+          margin: 0 auto 20px;
+        }
+        .dsg-loading-logo {
+          font-size: 28px; font-weight: 700; margin-bottom: 16px;
+          background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+          -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .dsg-loading-text { font-size: 18px; font-weight: 500; margin-bottom: 8px; color: #fff; }
+        .dsg-loading-subtext { font-size: 14px; color: #94a3b8; }
+        @keyframes dsg-spin { to { transform: rotate(360deg); } }
+      `;
+      document.head?.appendChild(style);
     }
+
+    (document.body || document.documentElement).appendChild(loadingOverlay);
   }
-  
-  function fillAndSubmit(creds) {
-    let attempts = 0;
-    const maxAttempts = 15;
-    
-    const tryFill = () => {
-      attempts++;
-      
-      const userField = findUsernameField(creds.usernameField);
-      const passField = findPasswordField(creds.passwordField);
-      
-      if (userField && passField) {
-        // PREVENT PASSWORD SAVE - 7 techniques
-        preventPasswordSave(userField, passField);
-        
-        // Fill username
-        fillInput(userField, creds.username);
-        
-        setTimeout(() => {
-          // Fill password
-          fillInput(passField, creds.password);
-          
-          setTimeout(() => {
-            // Find and click login button
-            const btn = findLoginButton();
-            if (btn) {
-              submitWithPasswordPrevention(userField, passField, btn);
-            } else {
-              // Try form.submit() as fallback
-              const form = userField.closest('form') || passField.closest('form');
-              if (form) {
-                scrambleFieldsBeforeSubmit(userField, passField);
-                form.submit();
-              }
-              setTimeout(hideLoadingOverlay, 1000);
-            }
-          }, 300);
-        }, 200);
-        
-      } else if (attempts < maxAttempts) {
-        setTimeout(tryFill, 500);
-      } else {
-        hideLoadingOverlay();
-        chrome.runtime.sendMessage({ action: 'LOGIN_FAILED' });
+
+  function hideLoadingOverlay() {
+    if (!loadingOverlay) return;
+    loadingOverlay.style.opacity = '0';
+    loadingOverlay.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => {
+      loadingOverlay?.remove();
+      document.getElementById('dsg-loading-styles')?.remove();
+      loadingOverlay = null;
+    }, 300);
+  }
+
+  async function fillAndSubmit(creds) {
+    const userField = await waitForField(() => findUsernameField(creds.usernameField), 20, 400);
+    if (!userField) return false;
+
+    fillInput(userField, creds.username);
+    await sleep(250);
+
+    // Zoho and similar flows are often two-step (username page, then password page).
+    let passField = findPasswordField(creds.passwordField);
+    if (!passField) {
+      const continueButton = findContinueButton();
+      if (continueButton) {
+        continueButton.click();
+        await sleep(700);
       }
-    };
-    
-    tryFill();
+      passField = await waitForField(() => findPasswordField(creds.passwordField), 20, 500);
+    }
+    if (!passField) return false;
+
+    preventPasswordSave(userField, passField);
+    fillInput(passField, creds.password);
+    await sleep(250);
+
+    const loginButton = findLoginButton();
+    if (loginButton) {
+      submitWithPasswordPrevention(userField, passField, loginButton);
+      return true;
+    }
+
+    const form = passField.closest('form') || userField.closest('form');
+    if (!form) return false;
+
+    scrambleFieldsBeforeSubmit(userField, passField);
+    try {
+      if (typeof form.requestSubmit === 'function') form.requestSubmit();
+      else form.submit();
+    } catch (error) {
+      console.warn('[DSG] Form submit fallback failed:', error);
+      return false;
+    }
+
+    setTimeout(hideLoadingOverlay, 1500);
+    return true;
   }
-  
-  // ============ PASSWORD SAVE PREVENTION - 7 TECHNIQUES ============
-  
-  function preventPasswordSave(userField, passField) {
-    // 1. Autocomplete attributes
-    userField.setAttribute('autocomplete', 'off');
-    passField.setAttribute('autocomplete', 'new-password');
-    
-    // 2. Password manager ignore flags
-    [userField, passField].forEach(f => {
-      f.setAttribute('data-lpignore', 'true');      // LastPass
-      f.setAttribute('data-1p-ignore', 'true');     // 1Password
-      f.setAttribute('data-bwignore', 'true');      // Bitwarden
-      f.setAttribute('data-form-type', 'other');
+
+  function waitForField(getField, maxAttempts, delayMs) {
+    return new Promise((resolve) => {
+      let attempts = 0;
+      const tryFind = () => {
+        attempts += 1;
+        try {
+          const field = getField();
+          if (field) {
+            resolve(field);
+            return;
+          }
+        } catch (_) {
+          // Ignore selector/runtime issues and continue trying.
+        }
+
+        if (attempts >= maxAttempts) {
+          resolve(null);
+          return;
+        }
+        setTimeout(tryFind, delayMs);
+      };
+      tryFind();
     });
-    
-    // 3. Form autocomplete
-    const form = userField.closest('form') || passField.closest('form');
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function preventPasswordSave(userField, passField) {
+    if (!passField) return;
+
+    if (userField) userField.setAttribute('autocomplete', 'off');
+    passField.setAttribute('autocomplete', 'new-password');
+
+    [userField, passField].filter(Boolean).forEach((field) => {
+      field.setAttribute('data-lpignore', 'true');
+      field.setAttribute('data-1p-ignore', 'true');
+      field.setAttribute('data-bwignore', 'true');
+      field.setAttribute('data-form-type', 'other');
+    });
+
+    const form = passField.closest('form') || userField?.closest('form');
     if (form) {
       form.setAttribute('autocomplete', 'off');
       form.setAttribute('data-lpignore', 'true');
     }
-    
-    // 4. Dummy fields BEFORE real fields (password managers grab first match)
+
     const dummy = document.createElement('div');
     dummy.style.cssText = 'position:absolute;left:-9999px;top:-9999px;height:0;overflow:hidden;';
     dummy.innerHTML = `
@@ -167,94 +207,94 @@
       <input type="password" name="fake_pass_${Date.now()}" autocomplete="current-password" tabindex="-1">
     `;
     if (form) form.insertBefore(dummy, form.firstChild);
-    else document.body.insertBefore(dummy, document.body.firstChild);
-    
-    // 5. Temporarily convert password to text
-    const origType = passField.type;
+    else document.body?.insertBefore(dummy, document.body.firstChild);
+
+    const originalType = passField.type;
     passField.type = 'text';
-    setTimeout(() => { passField.type = origType; }, 50);
-    
-    // 6. Readonly during fill
-    userField.readOnly = true;
+    setTimeout(() => {
+      passField.type = originalType;
+    }, 50);
+
+    if (userField) userField.readOnly = true;
     passField.readOnly = true;
     setTimeout(() => {
-      userField.readOnly = false;
+      if (userField) userField.readOnly = false;
       passField.readOnly = false;
     }, 100);
-    
-    // 7. Blur fields
-    userField.blur();
+
+    userField?.blur();
     passField.blur();
   }
-  
+
   function scrambleFieldsBeforeSubmit(userField, passField) {
+    if (!passField) return;
+
     const rand = '_dsg_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    userField.name = 'f_x' + rand;
-    userField.id = 'i_x' + rand;
+
+    if (userField) {
+      userField.name = 'f_x' + rand;
+      userField.id = 'i_x' + rand;
+    }
+
     passField.name = 'f_y' + rand;
     passField.id = 'i_y' + rand;
     passField.setAttribute('autocomplete', 'new-password');
   }
-  
-  function submitWithPasswordPrevention(userField, passField, btn) {
-    const form = userField.closest('form') || passField.closest('form');
-    
-    // Store originals
-    const origUserName = userField.name;
-    const origPassName = passField.name;
-    const origUserId = userField.id;
-    const origPassId = passField.id;
-    
-    // Scramble before submit
+
+  function submitWithPasswordPrevention(userField, passField, button) {
+    const form = passField?.closest('form') || userField?.closest('form');
+
+    const originalUserName = userField?.name;
+    const originalPassName = passField?.name;
+    const originalUserId = userField?.id;
+    const originalPassId = passField?.id;
+
     scrambleFieldsBeforeSubmit(userField, passField);
-    
     if (form) form.setAttribute('autocomplete', 'off');
-    
-    // Click button
+
     requestAnimationFrame(() => {
-      btn.click();
-      
-      // Backup: form.submit() if click didn't navigate
+      button.click();
+
       if (form) {
         setTimeout(() => {
-          if (document.contains(btn)) {
-            try {
-              if (form.requestSubmit) form.requestSubmit(btn);
-              else form.submit();
-            } catch (e) {}
+          if (!document.contains(button)) return;
+          try {
+            if (typeof form.requestSubmit === 'function') form.requestSubmit(button);
+            else form.submit();
+          } catch (_) {
+            // Ignore fallback submit errors
           }
         }, 400);
       }
-      
-      // Hide overlay after redirect starts
+
       setTimeout(hideLoadingOverlay, 1500);
-      
-      // Restore originals (in case of validation error)
+
       setTimeout(() => {
-        if (document.contains(userField)) {
-          userField.name = origUserName;
-          userField.id = origUserId;
+        if (userField && document.contains(userField)) {
+          userField.name = originalUserName || '';
+          userField.id = originalUserId || '';
         }
-        if (document.contains(passField)) {
-          passField.name = origPassName;
-          passField.id = origPassId;
+        if (passField && document.contains(passField)) {
+          passField.name = originalPassName || '';
+          passField.id = originalPassId || '';
         }
       }, 600);
     });
-    
-    chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS' });
   }
-  
-  // ============ FIELD FINDING ============
-  
+
   function findUsernameField(preferredName) {
     const selectors = [
-      `input[name="${preferredName}"]`,
-      `input[id="${preferredName}"]`,
-      `input[name="${preferredName?.replace(/\$/g, '_')}"]`,
-      `input[name*="txtUserName" i]`,
-      `input[name*="UserName" i]`,
-      `input[id*="txtUserName" i]`,
+      preferredName ? `input[name="${preferredName}"]` : null,
+      preferredName ? `input[id="${preferredName}"]` : null,
+      preferredName ? `input[name="${preferredName.replace(/\$/g, '_')}"]` : null,
+      'input[name="LOGIN_ID"]',
+      'input[name="login_id"]',
+      'input[id="LOGIN_ID"]',
+      'input[id="login_id"]',
+      'input[id*="login_id" i]',
+      'input[name*="txtUserName" i]',
+      'input[name*="UserName" i]',
+      'input[id*="txtUserName" i]',
       'input[type="email"]',
       'input[name*="user" i]',
       'input[name*="email" i]',
@@ -265,49 +305,84 @@
       'input[placeholder*="email" i]',
       'input[placeholder*="user" i]',
       'input[name="Email"]',
-      'input[name="LOGIN_ID"]',
       'form input[type="text"]:first-of-type'
-    ];
-    
-    for (const sel of selectors) {
+    ].filter(Boolean);
+
+    for (const selector of selectors) {
       try {
-        const el = document.querySelector(sel);
-        if (el && isVisible(el)) return el;
-      } catch (e) {}
+        const field = document.querySelector(selector);
+        if (field && isVisible(field)) return field;
+      } catch (_) {
+        // Ignore invalid selector and continue
+      }
     }
-    
-    // Fallback: any visible text input
-    const inputs = document.querySelectorAll('input[type="text"], input:not([type])');
-    for (const inp of inputs) {
-      if (isVisible(inp)) return inp;
+
+    const textInputs = document.querySelectorAll('input[type="text"], input:not([type])');
+    for (const input of textInputs) {
+      if (isVisible(input)) return input;
     }
     return null;
   }
-  
+
   function findPasswordField(preferredName) {
     const selectors = [
-      `input[name="${preferredName}"]`,
-      `input[id="${preferredName}"]`,
-      `input[name="${preferredName?.replace(/\$/g, '_')}"]`,
-      `input[name*="txtPassword" i]`,
-      `input[id*="txtPassword" i]`,
+      preferredName ? `input[name="${preferredName}"]` : null,
+      preferredName ? `input[id="${preferredName}"]` : null,
+      preferredName ? `input[name="${preferredName.replace(/\$/g, '_')}"]` : null,
+      'input[name="PASSWORD"]',
+      'input[name="password"]',
+      'input[id="PASSWORD"]',
+      'input[id="password"]',
+      'input[id*="password" i]',
+      'input[name*="txtPassword" i]',
+      'input[id*="txtPassword" i]',
       'input[type="password"]',
       'input[name*="pass" i]',
       'input[name*="pwd" i]',
       'input[id*="pass" i]',
-      'input[autocomplete="current-password"]',
-      'input[name="PASSWORD"]'
-    ];
-    
-    for (const sel of selectors) {
+      'input[autocomplete="current-password"]'
+    ].filter(Boolean);
+
+    for (const selector of selectors) {
       try {
-        const el = document.querySelector(sel);
-        if (el && isVisible(el)) return el;
-      } catch (e) {}
+        const field = document.querySelector(selector);
+        if (field && isVisible(field)) return field;
+      } catch (_) {
+        // Ignore invalid selector and continue
+      }
     }
     return null;
   }
-  
+
+  function findContinueButton() {
+    const selectors = [
+      '#nextbtn',
+      'button#nextbtn',
+      'input#nextbtn',
+      'button[name="next"]',
+      'input[name="next"]'
+    ];
+
+    for (const selector of selectors) {
+      try {
+        const button = document.querySelector(selector);
+        if (button && isVisible(button)) return button;
+      } catch (_) {
+        // Ignore and continue
+      }
+    }
+
+    const candidates = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
+    for (const candidate of candidates) {
+      const text = (candidate.textContent || candidate.value || '').toLowerCase();
+      if ((text.includes('next') || text.includes('continue')) && isVisible(candidate)) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
   function findLoginButton() {
     const selectors = [
       'button[type="submit"]',
@@ -319,63 +394,79 @@
       'input[name*="btnLogin" i]',
       'input[id*="btnLogin" i]',
       'input[name*="btnSubmit" i]',
-      '.btn-login', '.btn-signin',
+      '.btn-login',
+      '.btn-signin',
       'form button:not([type="button"])'
     ];
-    
-    for (const sel of selectors) {
+
+    for (const selector of selectors) {
       try {
-        const el = document.querySelector(sel);
-        if (el && isVisible(el) && !isSkipButton(el)) return el;
-      } catch (e) {}
-    }
-    
-    // Text search
-    const btns = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
-    for (const btn of btns) {
-      const text = (btn.textContent || btn.value || '').toLowerCase();
-      if ((text.includes('sign in') || text.includes('log in') || text.includes('login') || text.includes('submit')) && isVisible(btn)) {
-        return btn;
+        const button = document.querySelector(selector);
+        if (button && isVisible(button) && !isSkipButton(button)) return button;
+      } catch (_) {
+        // Ignore and continue
       }
     }
-    
-    // Any submit in form with password
+
+    const candidates = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
+    for (const candidate of candidates) {
+      const text = (candidate.textContent || candidate.value || '').toLowerCase();
+      const isLoginAction = text.includes('sign in') || text.includes('log in') || text.includes('login') || text.includes('submit');
+      if (isLoginAction && isVisible(candidate) && !isSkipButton(candidate)) {
+        return candidate;
+      }
+    }
+
     const forms = document.querySelectorAll('form');
     for (const form of forms) {
-      if (form.querySelector('input[type="password"]')) {
-        const btn = form.querySelector('button, input[type="submit"]');
-        if (btn && isVisible(btn)) return btn;
-      }
+      if (!form.querySelector('input[type="password"]')) continue;
+      const button = form.querySelector('button, input[type="submit"]');
+      if (button && isVisible(button) && !isSkipButton(button)) return button;
     }
-    
+
     return null;
   }
-  
-  function isSkipButton(el) {
-    const text = (el.textContent || el.value || '').toLowerCase();
-    return text.includes('forgot') || text.includes('register') || text.includes('sign up') || text.includes('create');
+
+  function isSkipButton(element) {
+    const text = (element.textContent || element.value || '').toLowerCase();
+    return text.includes('forgot') ||
+      text.includes('register') ||
+      text.includes('sign up') ||
+      text.includes('create') ||
+      text.includes('next') ||
+      text.includes('continue');
   }
-  
-  function isVisible(el) {
-    if (!el) return false;
-    const style = getComputedStyle(el);
-    return style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null;
+
+  function isVisible(element) {
+    if (!element) return false;
+    const style = getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+      return false;
+    }
+    const rect = element.getBoundingClientRect();
+    return (rect.width > 0 && rect.height > 0) || element.offsetParent !== null || style.position === 'fixed';
   }
-  
-  function fillInput(el, value) {
-    if (!el || !value) return;
-    el.focus();
-    el.value = '';
-    
-    // Native setter for React/Angular/Vue
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-    if (setter) setter.call(el, value);
-    el.value = value;
-    
-    // Fire events
-    ['input', 'change', 'keydown', 'keyup', 'keypress'].forEach(evt => {
-      el.dispatchEvent(new Event(evt, { bubbles: true, cancelable: true }));
+
+  function fillInput(element, value) {
+    if (!element || value == null) return;
+    element.focus();
+    element.value = '';
+
+    const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (nativeSetter) nativeSetter.call(element, value);
+    element.value = value;
+
+    ['input', 'change', 'keydown', 'keyup', 'keypress'].forEach((eventName) => {
+      element.dispatchEvent(new Event(eventName, { bubbles: true, cancelable: true }));
     });
   }
-  
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
 })();
