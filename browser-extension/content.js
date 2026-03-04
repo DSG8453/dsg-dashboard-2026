@@ -1,4 +1,4 @@
-// DSG Transport Secure Login - Content Script v1.3.23
+// DSG Transport Secure Login - Content Script v1.3.24
 // Shows OVERLAY to hide login form, fills credentials, auto-submits
 // DETECTS CAPTCHA/2FA: If found, reveals page for user to complete manually
 // User NEVER sees credentials - only masked dots (••••••••)
@@ -346,7 +346,7 @@
   
   function fillAndSubmit(creds) {
     let attempts = 0;
-    const maxAttempts = 20;
+    const maxAttempts = 40; // Increased from 20 to 40 (20 seconds) for slow connections
     
     // Store creds for retry functionality
     currentCreds = creds;
@@ -832,6 +832,10 @@
       'input[id="loginId"]',
       'input[name="userId"]',
       'input[id="userId"]',
+      // Zoho specific
+      'input[name="LOGIN_ID"]',
+      'input[id="login_id"]',
+      'input[name="login_id"]',
       // Common patterns
       `input[name*="txtUserName" i]`,
       `input[name*="UserName" i]`,
@@ -843,17 +847,19 @@
       'input[id*="user" i]',
       'input[id*="email" i]',
       'input[autocomplete="username"]',
+      'input[autocomplete="email"]',
       'input[placeholder*="email" i]',
       'input[placeholder*="user" i]',
       'input[placeholder*="login" i]',
+      'input[placeholder*="id" i]',
       'input[name="Email"]',
-      'input[name="LOGIN_ID"]',
       // RMIS specific
       'input[name="j_username"]',
       'input[id="j_username"]',
-      // Generic fallbacks
+      // Generic fallbacks - find any visible text input
       'form input[type="text"]:first-of-type',
-      'input[type="text"]:not([hidden])'
+      'input[type="text"]:not([hidden]):not([type="hidden"])',
+      'input:not([type="password"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"])'
     ];
     
     for (const sel of selectors) {
@@ -861,6 +867,15 @@
         const el = document.querySelector(sel);
         if (el && isVisible(el)) return el;
       } catch (e) {}
+    }
+    
+    // Ultimate fallback: find ANY visible text-like input
+    const allInputs = document.querySelectorAll('input');
+    for (const input of allInputs) {
+      const type = (input.type || 'text').toLowerCase();
+      if (['text', 'email', 'tel', ''].includes(type) && isVisible(input)) {
+        return input;
+      }
     }
     
     // Fallback: any visible text input
