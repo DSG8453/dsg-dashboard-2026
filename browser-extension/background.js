@@ -34,12 +34,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'GET_PENDING_LOGIN') {
     chrome.storage.local.get('pendingLogin', (data) => {
       const pending = data.pendingLogin;
-      if (pending && isUrlMatch(pending.url, sender.tab?.url)) {
-        sendResponse(pending);
-        chrome.storage.local.remove('pendingLogin');
-      } else {
-        sendResponse(null);
+      if (pending) {
+        const isExpired = Date.now() - (pending.timestamp || 0) > 120000;
+        if (isExpired) {
+          chrome.storage.local.remove('pendingLogin');
+          sendResponse(null);
+          return;
+        }
       }
+
+      // Keep pending credentials during multi-step logins (page reloads).
+      // They are cleared on LOGIN_SUCCESS / LOGIN_FAILED / timeout cleanup.
+      if (pending && isUrlMatch(pending.url, sender.tab?.url)) sendResponse(pending);
+      else sendResponse(null);
     });
     return true;
   }
@@ -50,7 +57,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   
-  if (request.action === 'LOGIN_SUCCESS' || request.action === 'LOGIN_FAILED') {
+  if (
+    request.action === 'LOGIN_SUCCESS' ||
+    request.action === 'LOGIN_FAILED' ||
+    request.action === 'LOGIN_NEEDS_MANUAL'
+  ) {
+    chrome.storage.local.remove('pendingLogin');
     sendResponse({ acknowledged: true });
     return true;
   }

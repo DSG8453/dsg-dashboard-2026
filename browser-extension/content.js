@@ -108,25 +108,54 @@
   }
 
   async function fillAndSubmit(creds) {
-    const userField = await waitForField(() => findUsernameField(creds.usernameField), 20, 400);
+    const initialFields = await waitForAnyLoginFields(creds, 25, 400);
+    if (!initialFields) return false;
+
+    let userField = initialFields.userField;
+    let passField = initialFields.passField;
+
+    // Password-only step (second page of multi-step flows).
+    if (passField && !userField) {
+      return submitPasswordOnly(passField, creds);
+    }
+
     if (!userField) return false;
 
     fillInput(userField, creds.username);
     await sleep(250);
 
     // Zoho and similar flows are often two-step (username page, then password page).
-    let passField = findPasswordField(creds.passwordField);
     if (!passField) {
       const continueButton = findContinueButton();
       if (continueButton) {
-        continueButton.click();
+        clickElement(continueButton);
         await sleep(700);
       }
-      passField = await waitForField(() => findPasswordField(creds.passwordField), 20, 500);
+
+      // Allow extra time on slower connections/account variants.
+      passField = await waitForField(() => findPasswordField(creds.passwordField), 40, 500);
     }
     if (!passField) return false;
 
+    // Refresh username field reference after step transitions.
+    userField = findUsernameField(creds.usernameField) || userField;
+    return submitWithKnownFields(userField, passField, creds);
+  }
+
+  async function submitPasswordOnly(passField, creds) {
+    return submitWithKnownFields(null, passField, creds);
+  }
+
+  async function submitWithKnownFields(userField, passField, creds) {
+    if (!passField) return false;
+
     preventPasswordSave(userField, passField);
+
+    if (userField && !userField.value) {
+      fillInput(userField, creds.username);
+      await sleep(150);
+    }
+
     fillInput(passField, creds.password);
     await sleep(250);
 
@@ -136,7 +165,7 @@
       return true;
     }
 
-    const form = passField.closest('form') || userField.closest('form');
+    const form = passField.closest('form') || userField?.closest('form');
     if (!form) return false;
 
     scrambleFieldsBeforeSubmit(userField, passField);
@@ -150,6 +179,30 @@
 
     setTimeout(hideLoadingOverlay, 1500);
     return true;
+  }
+
+  function waitForAnyLoginFields(creds, maxAttempts, delayMs) {
+    return new Promise((resolve) => {
+      let attempts = 0;
+      const tryFind = () => {
+        attempts += 1;
+
+        const userField = findUsernameField(creds.usernameField);
+        const passField = findPasswordField(creds.passwordField);
+        if (userField || passField) {
+          resolve({ userField, passField });
+          return;
+        }
+
+        if (attempts >= maxAttempts) {
+          resolve(null);
+          return;
+        }
+
+        setTimeout(tryFind, delayMs);
+      };
+      tryFind();
+    });
   }
 
   function waitForField(getField, maxAttempts, delayMs) {
@@ -356,9 +409,17 @@
 
   function findContinueButton() {
     const selectors = [
+      'button[id*="next" i]',
+      'input[type="button"][value*="Next" i]',
+      'input[type="submit"][value*="Next" i]',
+      'button[data-action*="next" i]',
+      'button[aria-label*="next" i]',
       '#nextbtn',
       'button#nextbtn',
       'input#nextbtn',
+      '.nextbtn',
+      '.next-btn',
+      'button[class*="next" i]',
       'button[name="next"]',
       'input[name="next"]'
     ];
@@ -459,6 +520,21 @@
     ['input', 'change', 'keydown', 'keyup', 'keypress'].forEach((eventName) => {
       element.dispatchEvent(new Event(eventName, { bubbles: true, cancelable: true }));
     });
+  }
+
+  function clickElement(element) {
+    if (!element) return;
+    try {
+      element.click();
+    } catch (_) {
+      // Ignore
+    }
+
+    try {
+      element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+    } catch (_) {
+      // Ignore
+    }
   }
 
   function escapeHtml(value) {
