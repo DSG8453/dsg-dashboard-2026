@@ -166,6 +166,63 @@
     }
     return false;
   }
+
+  function looksLikeLoginPage() {
+    const url = window.location.href.toLowerCase();
+    const bodyText = document.body?.innerText?.toLowerCase() || '';
+
+    const urlLooksLogin = (
+      url.includes('login') ||
+      url.includes('signin') ||
+      url.includes('sign-in') ||
+      url.includes('accounts.zoho.com') ||
+      url.includes('auth')
+    );
+
+    const textLooksLogin = (
+      bodyText.includes('sign in') ||
+      bodyText.includes('log in') ||
+      bodyText.includes('login') ||
+      bodyText.includes('enter password') ||
+      bodyText.includes('forgot password')
+    );
+
+    return urlLooksLogin || textLooksLogin;
+  }
+
+  function isLikelyAlreadyLoggedIn() {
+    // If any password input exists, we are still on a login flow.
+    if (document.querySelector('input[type="password"]')) return false;
+
+    // Strong indicators that user is already authenticated.
+    const authIndicators = [
+      'a[href*="logout" i]',
+      'button[id*="logout" i]',
+      'a[href*="signout" i]',
+      'button[id*="signout" i]',
+      '[aria-label*="profile" i]',
+      '[class*="profile" i]',
+      '[class*="avatar" i]'
+    ];
+    for (const sel of authIndicators) {
+      try {
+        const el = document.querySelector(sel);
+        if (el && isVisible(el)) return true;
+      } catch (e) {}
+    }
+
+    // If it doesn't look like a login page anymore, treat as already logged in.
+    return !looksLikeLoginPage();
+  }
+
+  function isProbablyVisible(el) {
+    if (!el) return false;
+    const style = getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+    if (el.offsetParent !== null) return true;
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
   
   // ============ LOADING OVERLAY ============
   
@@ -355,9 +412,15 @@
         // Keep trying to find fields
         setTimeout(tryFill, 500);
       } else {
-        // Don't hide overlay - show retry options
-        showRetryOverlay('Login fields not found', creds);
-        chrome.runtime.sendMessage({ action: 'LOGIN_FAILED' });
+        // If login form is gone and user appears authenticated, don't show failure.
+        if (isLikelyAlreadyLoggedIn()) {
+          hideLoadingOverlay();
+          chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS' });
+        } else {
+          // Don't hide overlay - show retry options
+          showRetryOverlay('Login fields not found', creds);
+          chrome.runtime.sendMessage({ action: 'LOGIN_FAILED' });
+        }
       }
     };
     
@@ -450,6 +513,8 @@
       'input[type="button"][value*="Next" i]',
       'input[type="submit"][value*="Next" i]',
       'button[data-action*="next" i]',
+      '[role="button"][id*="next" i]',
+      '[role="button"][class*="next" i]',
       'button[aria-label*="next" i]',
       'input[type="button"][value*="Continue" i]',
       'input[type="submit"][value*="Continue" i]',
@@ -460,16 +525,16 @@
     for (const sel of selectors) {
       try {
         const el = document.querySelector(sel);
-        if (el && isVisible(el)) return el;
+        if (el && isProbablyVisible(el)) return el;
       } catch (e) {}
     }
     
     // Text search for "Next" button
-    const btns = document.querySelectorAll('button, input[type="button"], input[type="submit"]');
+    const btns = document.querySelectorAll('button, input[type="button"], input[type="submit"], [role="button"], a');
     for (const btn of btns) {
       const text = (btn.textContent || btn.value || '').toLowerCase().trim();
       if (text === 'next' || text === 'continue' || text === 'proceed') {
-        if (isVisible(btn)) return btn;
+        if (isProbablyVisible(btn)) return btn;
       }
     }
     
@@ -479,7 +544,7 @@
   // Wait for password field to appear after username validation
   function waitForPasswordField(userField, creds, nextBtn) {
     let passwordAttempts = 0;
-    const maxPasswordAttempts = 70; // 35 seconds max for slower Zoho/account variants
+    const maxPasswordAttempts = 90; // 45 seconds max for slower Zoho/account variants
     
     const checkForPassword = () => {
       passwordAttempts++;
@@ -505,6 +570,13 @@
         setTimeout(checkForPassword, 500);
         
       } else {
+        // If page transitioned away from login and no password input exists, treat as success.
+        if (isLikelyAlreadyLoggedIn()) {
+          hideLoadingOverlay();
+          chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS' });
+          return;
+        }
+
         // Timeout - password field never appeared
         // DON'T show login page - show retry options instead
         showRetryOverlay('Password field not found', creds);
@@ -841,7 +913,8 @@
       } catch (e) {}
     }
     
-    // Fallback: any visible text input
+    // Fallback: any visible text input, but only on pages that look like login.
+    if (!looksLikeLoginPage()) return null;
     const inputs = document.querySelectorAll('input[type="text"], input:not([type])');
     for (const inp of inputs) {
       if (isVisible(inp)) return inp;
