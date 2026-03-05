@@ -836,14 +836,34 @@
         '.alert-danger',
         '.alert-error'
       ];
+      const loginForm = passField?.closest('form');
       for (const sel of errorSelectors) {
         try {
           const err = document.querySelector(sel);
-          if (err && isVisible(err) && err.textContent.length > 0) {
-            // Error detected - DON'T expose login page, show retry
-            showRetryOverlay('Login failed - ' + (err.textContent.slice(0, 50) || 'Invalid credentials'), creds);
-            return;
+          if (!err) continue;
+          if (!isStrictlyVisible(err)) continue;
+
+          const errText = (err.textContent || '').replace(/\s+/g, ' ').trim();
+          if (errText.length < 4) continue;
+          const lower = errText.toLowerCase();
+
+          // Avoid false positives from unrelated page blocks.
+          const hasErrorKeyword = [
+            'invalid', 'incorrect', 'failed', 'error', 'unable', 'expired', 'locked', 'required'
+          ].some(keyword => lower.includes(keyword));
+          if (!hasErrorKeyword) continue;
+
+          // If we can identify the login form, only trust errors in/near that form.
+          if (loginForm && !loginForm.contains(err) && !err.closest('form')) continue;
+
+          // RMIS sometimes renders expiry text early; only trust it after a grace period.
+          if ((lower.includes('password has expired') || lower.includes('password expired')) && elapsed < 15000) {
+            continue;
           }
+
+          // Error detected - DON'T expose login page, show retry
+          showRetryOverlay('Login failed - ' + (errText.slice(0, 60) || 'Invalid credentials'), creds);
+          return;
         } catch (e) {}
       }
       
@@ -1089,6 +1109,15 @@
     if (style.display === 'none' || style.visibility === 'hidden') return false;
     const rect = el.getBoundingClientRect();
     return (rect.width > 0 && rect.height > 0) || el.offsetParent !== null || style.position === 'fixed';
+  }
+
+  function isStrictlyVisible(el) {
+    if (!el) return false;
+    const style = getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    return el.offsetParent !== null || style.position === 'fixed';
   }
   
   function fillInput(el, value) {
